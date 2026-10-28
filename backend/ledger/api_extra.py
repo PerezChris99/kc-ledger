@@ -397,5 +397,5 @@ def export_invoice_pdf(request, invoice_id: int):
     })
     pdf = HTML(string=html, base_url=str(django_settings.BASE_DIR)).write_pdf()
     response = HttpResponse(pdf, content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="{invoice.number}.pdf"'
+    response["Content-Disposition"] = f'attachment; filename="invoice-{invoice.id}.pdf"'
     return response
