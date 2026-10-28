@@ -251,7 +251,7 @@ def create_client(request, payload: ClientIn):
         raise HttpError(422, "Unsupported client status.")
     values = payload.dict()
     values["currency"] = values["currency"].upper()
-    if len(values["currency"]) != 3:
+    if len(values["currency"]) != 3 or not values["currency"].isalpha():
         raise HttpError(422, "Currency must be a three-letter code.")
     client = Client.objects.create(**values)
     Event.objects.create(client=client, kind="client_created", category=Event.Category.RELATIONSHIP,
@@ -302,6 +302,18 @@ def update_client(request, client_id: int, payload: ClientPatch):
         raise HttpError(422, "Provide at least one field to update.")
     if "status" in changes and changes["status"] not in Client.Status.values:
         raise HttpError(422, "Unsupported client status.")
+    if "name" in changes:
+        changes["name"] = changes["name"].strip()
+        if not changes["name"] or len(changes["name"]) > 160:
+            raise HttpError(422, "Client name must contain 1–160 characters.")
+    if "email" in changes and changes["email"].strip():
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError
+        try:
+            validate_email(changes["email"].strip())
+        except ValidationError:
+            raise HttpError(422, "Enter a valid email address.")
+        changes["email"] = changes["email"].strip()
     if "currency" in changes:
         changes["currency"] = changes["currency"].upper()
         if len(changes["currency"]) != 3 or not changes["currency"].isalpha():
@@ -356,7 +368,7 @@ def create_invoice(request, payload: InvoiceIn):
         raise HttpError(422, "Invoice due date cannot precede issue date.")
     if payload.status not in {Invoice.Status.DRAFT, Invoice.Status.SENT, Invoice.Status.DISPUTED}:
         raise HttpError(422, "New invoices must be draft, sent, or disputed.")
-    if len(payload.currency) != 3:
+    if len(payload.currency) != 3 or not payload.currency.isalpha():
         raise HttpError(422, "Currency must be a three-letter code.")
     try:
         client = Client.objects.get(pk=payload.client_id)
@@ -383,6 +395,7 @@ def create_invoice(request, payload: InvoiceIn):
     _refresh_score(client)
     return {"id": inv.id, "number": inv.number, "status": inv.status}
 
+@transaction.atomic
 @router.patch("/invoices/{invoice_id}")
 def update_invoice(request, invoice_id: int, payload: InvoicePatch):
     try:
@@ -400,8 +413,8 @@ def update_invoice(request, invoice_id: int, payload: InvoicePatch):
             raise HttpError(422, "Paid and partial statuses are managed by the payment workflow.")
         if invoice.status == Invoice.Status.WRITTEN_OFF and changes["status"] != Invoice.Status.WRITTEN_OFF:
             raise HttpError(409, "A written-off invoice is terminal; create a separate corrective record instead of reopening it.")
-        if invoice.status == Invoice.Status.PAID and changes["status"] != Invoice.Status.PAID:
-            raise HttpError(409, "A paid invoice cannot be reopened or reclassified.")
+        if invoice.status in {Invoice.Status.PAID, Invoice.Status.PARTIAL} and changes["status"] != invoice.status:
+            raise HttpError(409, "Paid and partially paid invoice statuses are controlled by the payment workflow.")
         if changes["status"] == Invoice.Status.WRITTEN_OFF and invoice.status != Invoice.Status.WRITTEN_OFF:
             paid_total = invoice.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
             writeoff_amount = max(Decimal("0"), invoice.amount-paid_total)
