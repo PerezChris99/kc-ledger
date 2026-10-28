@@ -7,4 +7,4 @@ COPY backend/ ./backend/
 WORKDIR /app/backend
 RUN mkdir -p /app/data && python manage.py collectstatic --noinput
 EXPOSE 8000
-CMD ["sh", "-c", "python manage.py migrate --run-syncdb --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60"]
+CMD ["sh", "-c", "python manage.py migrate --run-syncdb --noinput && python manage.py ensure_owner && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60"]
