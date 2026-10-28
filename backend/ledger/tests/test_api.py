@@ -185,3 +185,35 @@ def test_worklog_records_engagement_time_and_expense(staff_client):
     assert Decimal(rate["hours"]) == Decimal("2.00")
     assert Decimal(rate["expenses"]) == Decimal("10.00")
     assert Decimal(rate["effective_hourly_rate"]) == Decimal("-5.00")
+
+
+@pytest.mark.django_db
+def test_invoice_written_off_status_cannot_be_reopened(staff_client):
+    owner = Client.objects.create(name="Write-off Client")
+    invoice = Invoice.objects.create(client=owner, number="WO-001", title="Unpaid work",
+        issue_date=date.today(), due_date=date.today()+timedelta(days=7),
+        amount=Decimal("100.00"), status=Invoice.Status.WRITTEN_OFF)
+    response = staff_client.patch(f"/api/invoices/{invoice.id}", data={"status":"sent"},
+        content_type="application/json")
+    assert response.status_code == 409
+    invoice.refresh_from_db()
+    assert invoice.status == Invoice.Status.WRITTEN_OFF
+
+@pytest.mark.django_db
+def test_invoice_paid_status_cannot_be_reclassified(staff_client):
+    owner = Client.objects.create(name="Paid Client")
+    invoice = Invoice.objects.create(client=owner, number="PAID-LOCK-001", title="Paid work",
+        issue_date=date.today(), due_date=date.today()+timedelta(days=7),
+        amount=Decimal("100.00"), status=Invoice.Status.PAID)
+    response = staff_client.patch(f"/api/invoices/{invoice.id}", data={"status":"disputed"},
+        content_type="application/json")
+    assert response.status_code == 409
+    invoice.refresh_from_db()
+    assert invoice.status == Invoice.Status.PAID
+
+@pytest.mark.django_db
+def test_client_rejects_nonalphabetic_currency(staff_client):
+    response = staff_client.post("/api/clients", data={"name":"Invalid Currency","currency":"1$D"},
+        content_type="application/json")
+    assert response.status_code == 422
+    assert not Client.objects.filter(name="Invalid Currency").exists()
