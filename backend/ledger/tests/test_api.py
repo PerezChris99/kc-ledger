@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
+from django.db.models import Sum
 from ledger.models import Client, Event, Instalment, Invoice, Payment, PaymentAllocation, PlanMeta
 
 @pytest.fixture
@@ -73,7 +74,7 @@ def test_payment_updates_invoice_allocation_score_and_audit(staff_client):
     assert invoice.status == Invoice.Status.PAID
     assert inst.status == Instalment.Status.PAID
     assert Payment.objects.filter(invoice=invoice).count() == 1
-    assert PaymentAllocation.objects.filter(instalment=inst).aggregate_total if False else True
+    assert PaymentAllocation.objects.filter(instalment=inst).aggregate(total=Sum('amount'))['total'] == Decimal('100.00')
     assert Event.objects.filter(invoice=invoice, kind="payment_recorded").exists()
 
 @pytest.mark.django_db
