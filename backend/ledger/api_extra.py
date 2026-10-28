@@ -140,3 +140,24 @@ def calendar_items(request, month: str = ""):
         if inst.status not in {Instalment.Status.PAID, Instalment.Status.WAIVED}:
             items.append({"date": inst.due_date.isoformat(), "kind": "instalment", "title": f"{inst.invoice.number} · {inst.label}", "client": inst.client.name, "status": inst.status})
     return {"month": first.strftime("%Y-%m"), "items": sorted(items, key=lambda x: (x["date"], x["title"]))}
+
+
+@router.get("/avoid")
+def avoid_clients(request):
+    from ledger.api import _client_snapshot
+    from ledger.services.scoring import compute_client_score
+    result = []
+    for client in Client.objects.filter(status="blacklisted") | Client.objects.filter(score__lt=40):
+        score = compute_client_score(_client_snapshot(client)).as_dict()
+        events = list(client.events.filter(deleted_at__isnull=True).order_by("-occurred_at")[:30])
+        flags = [{"kind": e.kind, "title": e.title, "detail": e.detail, "occurred_at": e.occurred_at.isoformat()} for e in events if e.polarity < 0]
+        for invoice in client.invoices.all():
+            if invoice.status == Invoice.Status.DISPUTED:
+                flags.append({"kind": "disputed_invoice", "title": f"Disputed invoice {invoice.number}", "detail": f"Invoice amount {invoice.amount} {invoice.currency}.", "occurred_at": invoice.updated_at.isoformat()})
+            if invoice.status == Invoice.Status.WRITTEN_OFF:
+                flags.append({"kind": "write_off", "title": f"Written off {invoice.number}", "detail": f"Invoice amount {invoice.amount} {invoice.currency}.", "occurred_at": invoice.updated_at.isoformat()})
+        result.append({"id": client.id, "name": client.name, "company": client.company, "email": client.email,
+            "status": client.status, "score": score["score"], "tier": score["tier"], "flags": flags[:20],
+            "invoices": len(client.invoices.all()), "lifetime_collected": str(sum((p.amount for p in client.payments.all()), Decimal("0")))})
+    unique = {item["id"]: item for item in result}
+    return {"items": sorted(unique.values(), key=lambda item: item["score"])}
