@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { api, money } from "../../api";
@@ -13,7 +13,7 @@ export default function InvoicesPage() {
   const [error, setError] = useState("");
   const queryClient = useQueryClient();
   const invoices = useQuery({ queryKey: ["invoices", q, status], queryFn: () => api<{items: InvoiceRow[]; total: number}>(`/api/invoices?q=${encodeURIComponent(q)}&status=${encodeURIComponent(status)}&limit=100`) });
-  async function recordPayment(event: React.FormEvent) {
+  async function recordPayment(event: FormEvent) {
     event.preventDefault();
     if (!paying) return;
     setError("");
