@@ -304,7 +304,7 @@ def update_client(request, client_id: int, payload: ClientPatch):
         raise HttpError(422, "Unsupported client status.")
     if "currency" in changes:
         changes["currency"] = changes["currency"].upper()
-        if len(changes["currency"]) != 3:
+        if len(changes["currency"]) != 3 or not changes["currency"].isalpha():
             raise HttpError(422, "Currency must be a three-letter code.")
     for key, value in changes.items():
         setattr(client, key, value)
@@ -398,6 +398,10 @@ def update_invoice(request, invoice_id: int, payload: InvoicePatch):
     if "status" in changes:
         if changes["status"] not in allowed:
             raise HttpError(422, "Paid and partial statuses are managed by the payment workflow.")
+        if invoice.status == Invoice.Status.WRITTEN_OFF and changes["status"] != Invoice.Status.WRITTEN_OFF:
+            raise HttpError(409, "A written-off invoice is terminal; create a separate corrective record instead of reopening it.")
+        if invoice.status == Invoice.Status.PAID and changes["status"] != Invoice.Status.PAID:
+            raise HttpError(409, "A paid invoice cannot be reopened or reclassified.")
         if changes["status"] == Invoice.Status.WRITTEN_OFF and invoice.status != Invoice.Status.WRITTEN_OFF:
             paid_total = invoice.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
             writeoff_amount = max(Decimal("0"), invoice.amount-paid_total)
