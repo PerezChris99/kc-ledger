@@ -32,12 +32,24 @@ class Command(BaseCommand):
             SignalType.objects.update_or_create(kind=kind, defaults={"label": label, "category": category, "polarity": polarity, "weight": Decimal(weight)})
         for index, (name, company, email, status, amount) in enumerate(DEMO, start=1):
             client, _ = Client.all_objects.get_or_create(email=email, defaults={"name": name, "company": company, "currency": "USD", "status": status, "started_at": today-timedelta(days=180*index), "notes": "Fictional demo record; not a real client."})
-            if client.deleted_at:\n                client.deleted_at = None\n                client.save(update_fields=["deleted_at", "updated_at"])\n            engagement, _ = Engagement.all_objects.get_or_create(client=client, name=f"{company} service", defaults={"kind": "fixed", "agreed_amount": Decimal(amount), "currency": "USD", "status": "active"})
-            if engagement.deleted_at:\n                engagement.deleted_at = None\n                engagement.save(update_fields=["deleted_at", "updated_at"])\n            overdue = index in (4, 5)
+            if client.deleted_at:
+                client.deleted_at = None
+                client.save(update_fields=["deleted_at", "updated_at"])
+            engagement, _ = Engagement.all_objects.get_or_create(client=client, name=f"{company} service", defaults={"kind": "fixed", "agreed_amount": Decimal(amount), "currency": "USD", "status": "active"})
+            if engagement.deleted_at:
+                engagement.deleted_at = None
+                engagement.save(update_fields=["deleted_at", "updated_at"])
+            overdue = index in (4, 5)
             invoice, _ = Invoice.all_objects.get_or_create(number=f"DEMO-{index:03d}", defaults={"client": client, "engagement": engagement, "title": f"{company} project milestone", "issue_date": today-timedelta(days=45), "due_date": today-timedelta(days=15 if overdue else -10), "amount": Decimal(amount), "currency": "USD", "status": "sent"})
-            if invoice.deleted_at:\n                invoice.deleted_at = None\n                invoice.save(update_fields=["deleted_at", "updated_at"])\n            instalment, _ = Instalment.all_objects.get_or_create(invoice=invoice, seq=1, defaults={"client": client, "label": "Full payment", "amount": invoice.amount, "due_date": invoice.due_date, "status": "pending"})
+            if invoice.deleted_at:
+                invoice.deleted_at = None
+                invoice.save(update_fields=["deleted_at", "updated_at"])
+            instalment, _ = Instalment.all_objects.get_or_create(invoice=invoice, seq=1, defaults={"client": client, "label": "Full payment", "amount": invoice.amount, "due_date": invoice.due_date, "status": "pending"})
             if not overdue:
                 payment, created = Payment.all_objects.get_or_create(invoice=invoice, reference=f"DEMO-PAY-{index:03d}", defaults={"client": client, "amount": invoice.amount, "paid_on": today-timedelta(days=20), "method": "demo"})
+                if payment.deleted_at:
+                    payment.deleted_at = None
+                    payment.save(update_fields=["deleted_at", "updated_at"])
                 if created:
                     PaymentAllocation.objects.create(payment=payment, instalment=instalment, amount=payment.amount)
                     instalment.status = "paid"
