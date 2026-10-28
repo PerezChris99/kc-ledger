@@ -285,7 +285,7 @@ def list_notifications(request, since: datetime | None = None, limit: int = 30):
         since = timezone.now() - __import__("datetime").timedelta(minutes=5)
     if timezone.is_naive(since):
         since = timezone.make_aware(since, timezone.get_current_timezone())
-    kinds = ["invoice_overdue_reminder", "instalment_due_reminder", "ghosting_detected", "recurring_invoice_drafted",
+    kinds = ["invoice_overdue_reminder", "instalment_due_reminder", "payment_recorded", "ghosting_detected", "recurring_invoice_drafted",
         "plan_verdict_perfect", "plan_verdict_late", "plan_verdict_at_risk", "plan_verdict_broken"]
     rows = Event.objects.filter(kind__in=kinds, occurred_at__gt=since).order_by("occurred_at", "id")[:limit]
     return {"items": [{"id": e.id, "kind": e.kind, "title": e.title, "detail": e.detail,
