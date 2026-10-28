@@ -4,7 +4,17 @@ from django.db import models
 from django.db.models import Q
 
 
-class LiveManager(models.Manager):
+class LiveQuerySet(models.QuerySet):
+    def delete(self):
+        from django.utils import timezone
+        count = self.update(deleted_at=timezone.now(), updated_at=timezone.now())
+        return count, {self.model._meta.label: count}
+
+    def hard_delete(self):
+        return super().delete()
+
+
+class LiveManager(models.Manager.from_queryset(LiveQuerySet)):
     def get_queryset(self):
         return super().get_queryset().filter(deleted_at__isnull=True)
 
@@ -23,6 +33,10 @@ class SoftDeleteModel(models.Model):
         from django.utils import timezone
         self.deleted_at = timezone.now()
         self.save(update_fields=["deleted_at", "updated_at"])
+
+    def delete(self, using=None, keep_parents=False):
+        self.soft_delete()
+        return 1, {self._meta.label: 1}
 
 
 class Client(SoftDeleteModel):
