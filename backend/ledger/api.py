@@ -399,10 +399,12 @@ def update_invoice(request, invoice_id: int, payload: InvoicePatch):
         if changes["status"] not in allowed:
             raise HttpError(422, "Paid and partial statuses are managed by the payment workflow.")
         if changes["status"] == Invoice.Status.WRITTEN_OFF and invoice.status != Invoice.Status.WRITTEN_OFF:
+            paid_total = invoice.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+            writeoff_amount = max(Decimal("0"), invoice.amount-paid_total)
             Event.objects.create(client=invoice.client, engagement=invoice.engagement, invoice=invoice,
                 kind="invoice_written_off", category=Event.Category.MONEY, polarity=-1,
-                title=f"Invoice {invoice.number} written off", detail=f"Written-off amount {invoice.amount} {invoice.currency}.",
-                amount=invoice.amount, occurred_at=timezone.now())
+                title=f"Invoice {invoice.number} written off", detail=f"Written-off amount {writeoff_amount} {invoice.currency}.",
+                amount=writeoff_amount, occurred_at=timezone.now())
     for key, value in changes.items():
         setattr(invoice, key, value)
     invoice.save()
