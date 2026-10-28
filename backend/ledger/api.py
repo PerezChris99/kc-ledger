@@ -286,7 +286,36 @@ def dashboard(request):
             expenses_total += amount
     attention = [{"kind": "overdue_invoice", "title": f"{i.number} overdue", "client": i.client.name,
         "due_date": i.due_date.isoformat()} for i in invoices if i.due_date < today and i.status not in {Invoice.Status.PAID, Invoice.Status.WRITTEN_OFF}]
+    from datetime import timedelta
+    month_starts = []
+    cursor = today.replace(day=1)
+    for _ in range(5):
+        cursor = (cursor - timedelta(days=1)).replace(day=1)
+    for _ in range(6):
+        month_starts.append(cursor)
+        cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+    revenue_by_month = {m.strftime("%Y-%m"): Decimal("0") for m in month_starts}
+    expense_by_month = {m.strftime("%Y-%m"): Decimal("0") for m in month_starts}
+    for payment in Payment.objects.select_related("invoice").all():
+        key = payment.paid_on.strftime("%Y-%m")
+        if key in revenue_by_month:
+            value = convert(payment.amount, payment.invoice.currency)
+            if value is None:
+                unknown.add(payment.invoice.currency)
+            else:
+                revenue_by_month[key] += value
+    for expense in Expense.objects.all():
+        key = expense.spent_on.strftime("%Y-%m")
+        if key in expense_by_month:
+            value = convert(expense.amount, expense.currency)
+            if value is None:
+                unknown.add(expense.currency)
+            else:
+                expense_by_month[key] += value
+    revenue_trend = [{"month": key, "revenue": float(revenue_by_month[key]), "expenses": float(expense_by_month[key])} for key in revenue_by_month]
+    invoice_status = [{"status": status, "count": sum(1 for item in invoices if item.status == status)} for status, _ in Invoice.Status.choices]
     return {"currency": base, "collected": str(collected), "outstanding": str(outstanding), "overdue": str(overdue),
         "expenses": str(expenses_total), "net_profit": str(collected-expenses_total), "client_count": Client.objects.count(),
         "invoice_count": len(invoices), "payment_count": Payment.objects.count(), "attention": attention[:5],
+        "revenue_trend": revenue_trend, "invoice_status": invoice_status,
         "unconverted_currencies": sorted(unknown)}
