@@ -19,7 +19,6 @@ _scheduler = None
 
 def refresh_instalment_states():
     today = timezone.localdate()
-    affected = set()
     for row in Instalment.objects.select_related("invoice", "client").filter(status__in=["pending", "late", "overdue"]):
         next_status = row.status
         if today > row.due_date + timedelta(days=row.grace_days + 30):
@@ -29,28 +28,30 @@ def refresh_instalment_states():
         if next_status != row.status:
             row.status = next_status
             row.save(update_fields=["status", "updated_at"])
-            affected.add(row.invoice_id)
-    for invoice_id in affected:
+    invoice_ids = set(Instalment.objects.values_list("invoice_id", flat=True).distinct())
+    for invoice_id in invoice_ids:
         invoice = Invoice.objects.select_related("client").filter(pk=invoice_id).first()
         if not invoice:
             continue
         rows = list(invoice.instalments.all())
+        if not rows:
+            continue
         verdict = evaluate_plan_verdict([{"due_date": r.due_date, "paid_on": r.paid_on, "status": r.status,
             "grace_days": r.grace_days, "amount": r.amount} for r in rows])
         with transaction.atomic():
             meta = PlanMeta.objects.filter(invoice=invoice).first()
-            previous = meta.last_verdict if meta and meta.last_verdict else None
-            if meta and previous != verdict:
-                meta.last_verdict = verdict
-                meta.save(update_fields=["last_verdict", "updated_at"])
-            if previous != verdict:
-                polarity = 1 if verdict == "perfect" else -1 if verdict in {"late", "at_risk", "broken"} else 0
-                Event.objects.create(client=invoice.client, engagement=invoice.engagement, invoice=invoice,
-                    kind=f"plan_verdict_{verdict}", category=Event.Category.MONEY, polarity=polarity,
-                    title=f"Plan verdict changed: {verdict.replace('_', ' ')}",
-                    detail=f"{invoice.number}: {previous or 'uninitialised'} → {verdict}.", occurred_at=timezone.now())
-                from ledger.api import _refresh_score
-                _refresh_score(invoice.client)
+            if not meta or meta.last_verdict == verdict:
+                continue
+            previous = meta.last_verdict
+            meta.last_verdict = verdict
+            meta.save(update_fields=["last_verdict", "updated_at"])
+            polarity = 1 if verdict == "perfect" else -1 if verdict in {"late", "at_risk", "broken"} else 0
+            Event.objects.create(client=invoice.client, engagement=invoice.engagement, invoice=invoice,
+                kind=f"plan_verdict_{verdict}", category=Event.Category.MONEY, polarity=polarity,
+                title=f"Plan verdict changed: {verdict.replace('_', ' ')}",
+                detail=f"{invoice.number}: {previous or 'uninitialised'} → {verdict}.", occurred_at=timezone.now())
+            from ledger.api import _refresh_score
+            _refresh_score(invoice.client)
 
 
 def emit_due_reminders():
