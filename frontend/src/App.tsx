@@ -16,7 +16,7 @@ import InstallPrompt from "./features/pwa/InstallPrompt";
 
 type Session = { authenticated: boolean; username: string | null };
 type CalendarResult = { month: string; items: {date:string;kind:string;title:string;client:string;status:string}[] };
-type Target = {id:number;name:string;type:string;amount:string;currency:string;deadline:string};
+type Target = {id:number;name:string;type:string;amount:string;currency:string;deadline:string;current:string;progress_pct:number;pace_status:string;days_remaining:number;conversion_available:boolean};
 
 const nav = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -47,12 +47,13 @@ function FxPopover() {
 
 function TargetTracker() {
   const targets=useQuery({queryKey:["targets"],queryFn:()=>api<{items:Target[]}>("/api/targets")});
-  const dashboard=useQuery({queryKey:["dashboard"],queryFn:()=>api<{currency:string;collected:string;client_count:number;total_hours:string}>("/api/dashboard")});
   const target=targets.data?.items[0];
-  if(!target) return <div className="target-empty"><span className="target-icon"><CircleDollarSign size={17}/></span><div><strong>No target set</strong><small>Set one in Settings</small></div></div>;
-  const current=target.type==="revenue"?Number(dashboard.data?.collected??0):target.type==="clients"?Number(dashboard.data?.client_count??0):Number(dashboard.data?.total_hours??0);
-  const progress=Math.max(0,Math.min(100,current/Math.max(1,Number(target.amount))*100));
-  return <button className="target-widget" onClick={()=>window.dispatchEvent(new CustomEvent("kc-ledger:navigate",{detail:"settings"}))}><div className="target-widget-top"><span>{target.name}</span><strong>{progress.toFixed(0)}%</strong></div><div className="target-track"><span style={{width:`${progress}%`}}/></div><small>{target.type==="revenue"?money(current,target.currency):current} / {target.type==="revenue"?money(target.amount,target.currency):target.amount} · {target.deadline}</small></button>;
+  if(!target) return <button className="target-empty" onClick={()=>window.dispatchEvent(new CustomEvent("kc-ledger:navigate",{detail:"settings"}))}><span className="target-icon"><CircleDollarSign size={17}/></span><div><strong>No target set</strong><small>Set one in Settings</small></div></button>;
+  const progress=Math.max(0,Math.min(100,target.progress_pct));
+  const currentLabel=target.type==="revenue"?money(target.current,target.currency):target.current;
+  const amountLabel=target.type==="revenue"?money(target.amount,target.currency):target.amount;
+  const paceLabel=target.pace_status==="fx_missing"?"FX rate missing":target.pace_status==="on_track"?"On pace":"Behind pace";
+  return <button className="target-widget" onClick={()=>window.dispatchEvent(new CustomEvent("kc-ledger:navigate",{detail:"settings"}))}><div className="target-widget-top"><span>{target.name}</span><strong>{progress.toFixed(0)}%</strong></div><div className="target-track"><span style={{width:`${progress}%`}}/></div><small>{currentLabel} / {amountLabel} · {paceLabel} · {target.days_remaining}d</small></button>;
 }
 
 export default function App() {
