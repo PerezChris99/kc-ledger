@@ -6,7 +6,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
-from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, Meta, Payment, PaymentAllocation, PlanMeta, Target, TimeEntry
+from ledger.models import Client, Engagement, Event, Expense, FxRate, Instalment, Invoice, Meta, Payment, PaymentAllocation, PlanMeta, Target, TimeEntry
 
 router = Router()
 
