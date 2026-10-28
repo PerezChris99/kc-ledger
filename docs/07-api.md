@@ -11,6 +11,7 @@ The API is rooted at `/api/`. Private endpoints require an active staff session 
 | `PATCH /api/invoices/{id}` | Edit permitted invoice fields |
 | `POST /api/payments` | Transactional payment record and FIFO allocation |
 | `GET/POST /api/plans` | List plans or create an instalment schedule |
+| `PATCH /api/plans/{invoice_id}` | Revise a schedule only before any payments are allocated; previous rows remain soft-deleted |
 | `GET /api/avoid` | Low-score and blacklisted client dossiers |
 | `GET /api/insights` | Receivables aging and revenue concentration |
 | `GET /api/events` | Filterable audit history |
