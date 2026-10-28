@@ -6,7 +6,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
-from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, Meta, Payment, PlanMeta, Target, TimeEntry
+from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, Meta, Payment, PaymentAllocation, PlanMeta, Target, TimeEntry
 
 router = Router()
 
@@ -399,3 +399,57 @@ def export_invoice_pdf(request, invoice_id: int):
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="invoice-{invoice.id}.pdf"'
     return response
+
+
+@router.patch("/plans/{invoice_id}")
+def update_plan(request, invoice_id: int, payload: PlanIn):
+    if payload.invoice_id != invoice_id:
+        raise HttpError(422, "Invoice ID in the request does not match the plan URL.")
+    rows = sorted(payload.instalments, key=lambda item: item.seq)
+    if not rows:
+        raise HttpError(422, "A plan must contain at least one instalment.")
+    sequences = [item.seq for item in rows]
+    if any(seq < 1 for seq in sequences) or len(set(sequences)) != len(sequences):
+        raise HttpError(422, "Instalment sequence numbers must be unique positive integers.")
+    if any(item.amount <= 0 or item.grace_days < 0 or item.grace_days > 60 for item in rows):
+        raise HttpError(422, "Amounts must be positive and grace periods must be between 0 and 60 days.")
+    if any(rows[index].due_date > rows[index + 1].due_date for index in range(len(rows)-1)):
+        raise HttpError(422, "Instalment dates must be chronological.")
+    with transaction.atomic():
+        try:
+            invoice = Invoice.objects.select_for_update().select_related("client").get(pk=invoice_id)
+        except Invoice.DoesNotExist:
+            raise HttpError(404, "Invoice not found.")
+        if invoice.status in {Invoice.Status.PAID, Invoice.Status.WRITTEN_OFF}:
+            raise HttpError(422, "Paid or written-off invoices cannot have their plans edited.")
+        existing = list(invoice.instalments.all())
+        if PaymentAllocation.objects.filter(instalment__in=existing).exists() or any(row.status == Instalment.Status.PAID or row.paid_on for row in existing):
+            raise HttpError(409, "A plan with allocated payments cannot be edited; preserve its financial history.")
+        paid = invoice.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        outstanding = max(Decimal("0"), invoice.amount-paid)
+        if sum((item.amount for item in rows), Decimal("0")) != outstanding:
+            raise HttpError(422, f"Instalment amounts must total the outstanding balance of {outstanding} {invoice.currency}.")
+        previous_verdict = evaluate_plan_verdict([{"due_date": row.due_date, "paid_on": row.paid_on,
+            "status": row.status, "grace_days": row.grace_days, "amount": row.amount} for row in existing]) if existing else None
+        for row in existing:
+            row.soft_delete()
+        for item in rows:
+            Instalment.objects.create(invoice=invoice, client=invoice.client, seq=item.seq, label=item.label.strip()[:120],
+                amount=item.amount, due_date=item.due_date, grace_days=item.grace_days)
+        verdict = evaluate_plan_verdict([{"due_date": item.due_date, "amount": item.amount, "grace_days": item.grace_days, "status": "pending"} for item in rows])
+        meta = PlanMeta.all_objects.filter(invoice=invoice).first()
+        if meta:
+            meta.deleted_at = None
+            meta.plan_deadline = max(item.due_date for item in rows)
+            meta.last_verdict = verdict
+            meta.notes = payload.notes
+            meta.save()
+        else:
+            PlanMeta.objects.create(invoice=invoice, plan_deadline=max(item.due_date for item in rows), last_verdict=verdict, notes=payload.notes)
+        Event.objects.create(client=invoice.client, engagement=invoice.engagement, invoice=invoice, kind="instalment_plan_updated",
+            category=Event.Category.MONEY, polarity=0, title=f"Instalment plan updated for {invoice.number}",
+            detail=f"Previous verdict: {previous_verdict or 'none'}; new verdict: {verdict}; {len(rows)} instalments scheduled.",
+            amount=outstanding, occurred_at=timezone.now())
+        from ledger.api import _refresh_score
+        score = _refresh_score(invoice.client)
+    return {"invoice_id": invoice.id, "invoice_number": invoice.number, "verdict": verdict, "instalment_count": len(rows), "score": score.score}
