@@ -88,8 +88,6 @@ def insights(request):
         "unconverted_currencies": sorted(currency_gaps)}
 
 def _target_progress(target):
-    from datetime import date
-    base = _get_app_settings()["base_currency"]
     today = timezone.localdate()
     current = Decimal("0")
     conversion_available = True
