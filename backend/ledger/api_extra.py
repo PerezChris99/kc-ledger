@@ -119,9 +119,24 @@ def insights(request):
         effective_rates.append({"client": client_name, "hours": str(hours), "collected": str(collected),
             "expenses": str(expenses), "net_contribution": str(net), "effective_hourly_rate": str(net/hours), "currency": base})
     effective_rates.sort(key=lambda row: Decimal(row["effective_hourly_rate"]), reverse=True)
+    client_rows = [{"id": row.id, "name": row.name, "company": row.company, "currency": row.currency}
+        for row in Client.objects.order_by("name")[:200]]
+    engagement_rows = [{"id": row.id, "client_id": row.client_id, "client_name": row.client.name, "name": row.name,
+        "kind": row.kind, "agreed_amount": str(row.agreed_amount), "currency": row.currency, "status": row.status,
+        "recurring_interval_days": row.recurring_interval_days, "next_invoice_date": row.next_invoice_date.isoformat() if row.next_invoice_date else None}
+        for row in Engagement.objects.select_related("client").order_by("-created_at")[:100]]
+    time_entry_rows = [{"id": row.id, "client_id": row.client_id, "client_name": row.client.name, "engagement_id": row.engagement_id,
+        "engagement_name": row.engagement.name, "hours": str(row.hours), "category": row.category,
+        "started_at": row.started_at.isoformat(), "note": row.note}
+        for row in TimeEntry.objects.select_related("client", "engagement").order_by("-started_at")[:12]]
+    expense_rows = [{"id": row.id, "client_id": row.client_id, "client_name": row.client.name if row.client else None,
+        "engagement_id": row.engagement_id, "category": row.category, "amount": str(row.amount), "currency": row.currency,
+        "spent_on": row.spent_on.isoformat(), "billable": row.billable, "note": row.note}
+        for row in Expense.objects.select_related("client", "engagement").order_by("-spent_on")[:12]]
     return {"currency": base, "aging": [{"bucket": k, "amount": str(v)} for k, v in buckets.items()],
         "concentration": concentration_rows, "effective_rates": effective_rates[:10],
         "time_entries": TimeEntry.objects.count(), "expenses_count": Expense.objects.count(),
+        "clients": client_rows, "engagements": engagement_rows, "recent_time_entries": time_entry_rows, "recent_expenses": expense_rows,
         "unconverted_currencies": sorted(currency_gaps)}
 
 
