@@ -337,8 +337,35 @@ def dashboard(request):
                 expense_by_month[key] += value
     revenue_trend = [{"month": key, "revenue": float(revenue_by_month[key]), "expenses": float(expense_by_month[key])} for key in revenue_by_month]
     invoice_status = [{"status": status, "count": sum(1 for item in invoices if item.status == status)} for status, _ in Invoice.Status.choices]
+    aging_totals = {"not_due": Decimal("0"), "1_30": Decimal("0"), "31_60": Decimal("0"), "61_plus": Decimal("0")}
+    client_revenue = {}
+    for inv in invoices:
+        paid = inv.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        balance = max(Decimal("0"), inv.amount-paid)
+        value = convert(balance, inv.currency)
+        if value is not None:
+            age = (today-inv.due_date).days
+            bucket = "not_due" if age <= 0 else "1_30" if age <= 30 else "31_60" if age <= 60 else "61_plus"
+            aging_totals[bucket] += value
+    for payment in Payment.objects.select_related("client", "invoice").all():
+        value = convert(payment.amount, payment.invoice.currency)
+        if value is not None:
+            client_revenue[payment.client_id] = client_revenue.get(payment.client_id, {"name": payment.client.name, "amount": Decimal("0")})
+            client_revenue[payment.client_id]["amount"] += value
+    concentration_total = sum((row["amount"] for row in client_revenue.values()), Decimal("0"))
+    concentration = sorted(client_revenue.values(), key=lambda row: row["amount"], reverse=True)[:5]
+    for row in concentration:
+        row["collected"] = str(row.pop("amount"))
+        row["share"] = float(Decimal(row["collected"])/concentration_total) if concentration_total else 0
+    health_rows = [{"id": client.id, "name": client.name, "status": client.status, "score": client.score,
+        "company": client.company} for client in Client.objects.order_by("-score", "name")[:8]]
+    today_items = list(attention[:5])
+    for inst in Instalment.objects.select_related("invoice", "client").filter(due_date__range=(today, today+timedelta(days=3))).exclude(status__in=[Instalment.Status.PAID, Instalment.Status.WAIVED])[:10]:
+        today_items.append({"kind": "instalment_due", "title": f"{inst.invoice.number} · {inst.label} due", "client": inst.client.name, "due_date": inst.due_date.isoformat()})
     return {"currency": base, "collected": str(collected), "outstanding": str(outstanding), "overdue": str(overdue),
         "expenses": str(expenses_total), "net_profit": str(collected-expenses_total), "client_count": Client.objects.count(),
-        "invoice_count": len(invoices), "payment_count": Payment.objects.count(), "total_hours": str(TimeEntry.objects.aggregate(total=Sum("hours"))["total"] or Decimal("0")), "attention": attention[:5],
+        "invoice_count": len(invoices), "payment_count": Payment.objects.count(), "total_hours": str(TimeEntry.objects.aggregate(total=Sum("hours"))["total"] or Decimal("0")), "attention": today_items[:10],
         "revenue_trend": revenue_trend, "invoice_status": invoice_status,
+        "aging": [{"bucket": key, "amount": str(value)} for key,value in aging_totals.items()],
+        "client_health": health_rows, "concentration": concentration,
         "unconverted_currencies": sorted(unknown)}
