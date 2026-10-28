@@ -59,3 +59,8 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
     CSRF_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
     SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+    if os.environ.get("COOKIE_SECURE", "0") == "1":
+        SECURE_SSL_REDIRECT = True
+        SECURE_HSTS_SECONDS = 31536000
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+        SECURE_HSTS_PRELOAD = False
