@@ -415,3 +415,6 @@ td strong { color: var(--text); font-weight: 500; }
 .target-row-main { min-width: 0; flex: 1; }
 .target-row-main .target-track { max-width: 280px; margin: 9px 0 6px; }
 .target-row-main > small:last-child { color: var(--text-muted); }
+
+.avoid-actions { display: flex; flex-direction: column; align-items: end; gap: 9px; }
+@media (max-width: 700px) { .avoid-actions { align-items: start; } }
