@@ -83,6 +83,8 @@ class Engagement(SoftDeleteModel):
     sow_deliverables = models.JSONField(default=list, blank=True)
     revision_limit = models.PositiveIntegerField(default=0)
     revisions_used = models.PositiveIntegerField(default=0)
+    recurring_interval_days = models.PositiveSmallIntegerField(default=0)
+    next_invoice_date = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
