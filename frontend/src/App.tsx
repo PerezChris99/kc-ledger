@@ -71,7 +71,7 @@ export default function App() {
     active==="insights" ? <InsightsPage/> : active==="avoid" ? <AvoidPage/> :
     active==="history" ? <HistoryPage/> : active==="settings" ? <SettingsPage/> : <DashboardPage/>;
   const heading=nav.find(item=>item.id===active)?.label??"Dashboard";
-  return <div className="app-frame">
+  return <div className="app-frame"><NotificationWatcher/>
     <aside className="sidebar">
       <a className="wordmark" href="/" onClick={e=>{e.preventDefault();setActive("dashboard");}} aria-label="KC Ledger home"><span className="wordmark-symbol">KC</span><span className="wordmark-copy">KC LEDGER<small>FINANCIAL OPERATIONS</small></span></a>
       <div className="sidebar-label">WORKSPACE</div>
