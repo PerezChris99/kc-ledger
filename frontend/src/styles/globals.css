@@ -418,3 +418,13 @@ td strong { color: var(--text); font-weight: 500; }
 
 .avoid-actions { display: flex; flex-direction: column; align-items: end; gap: 9px; }
 @media (max-width: 700px) { .avoid-actions { align-items: start; } }
+
+.insights-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.toolbar-actions { display:flex; align-items:center; justify-content:end; gap:8px; flex-wrap:wrap; }
+.checkbox-label { display:flex; flex-direction:row; align-items:center; gap:8px; font-size:12px; color:var(--text-secondary); }
+.checkbox-label input { width:16px; height:16px; accent-color:var(--primary); }
+.success { color:var(--success); }
+.danger { color:var(--danger); }
+.table-row-actions { display:flex; align-items:center; gap:8px; margin-top:4px; }
+.plan-actions { display:flex; align-items:center; gap:10px; }
+@media (max-width:700px) { .insights-toolbar { align-items:start; flex-direction:column; } .toolbar-actions { justify-content:start; width:100%; } .toolbar-actions button { flex:1; } .table-row-actions { flex-wrap:wrap; } }
