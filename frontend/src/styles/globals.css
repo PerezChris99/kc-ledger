@@ -9,7 +9,7 @@
   --warning: #D29922; --warning-surface: rgba(210,153,34,.12); --neutral-badge: #8B949E;
   --chart-grid: #263241; --chart-revenue: #58A6FF; --chart-profit: #3FB950; --chart-loss: #F85149; --chart-forecast: #D29922;
   --focus-ring: #58A6FF; --backdrop: rgba(0,0,0,.65);
-  --sidebar-bg: var(--sidebar-bg);
+  --sidebar-bg: #0D1218;
   --font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   font-family: var(--font-ui); color: var(--text); background: var(--bg); font-synthesis: none; text-rendering: optimizeLegibility;
