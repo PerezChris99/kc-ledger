@@ -1,0 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
+import { api, money } from "../../api";
+type Insights = { currency: string; aging: {bucket: string; amount: string}[]; concentration: {client: string; collected: string; share: number}[]; time_entries: number; expenses_count: number; unconverted_currencies: string[] };
+const labels: Record<string,string> = { not_due: "Not yet due", "1_30": "1–30 days overdue", "31_60": "31–60 days overdue", "61_plus": "61+ days overdue" };
+export default function InsightsPage() {
+  const query = useQuery({ queryKey: ["insights"], queryFn: () => api<Insights>("/api/insights") });
+  if (query.isLoading) return <div className="loading-panel">Calculating insights…</div>;
+  if (query.error || !query.data) return <div className="error-panel">Insights could not be loaded.</div>;
+  const data = query.data;
+  return <div className="insights-grid"><section className="panel"><div className="panel-heading"><span>RECEIVABLES AGING</span><span className="panel-period">{data.currency}</span></div>{data.aging.map(item => <div className="insight-bar-row" key={item.bucket}><div><span>{labels[item.bucket] ?? item.bucket}</span><strong className="mono">{money(item.amount,data.currency)}</strong></div><div className="insight-track"><span style={{width: `${Math.min(100, Number(item.amount)/(Math.max(1,...data.aging.map(x=>Number(x.amount))))*100)}%`}}/></div></div>)}</section><section className="panel"><div className="panel-heading"><span>REVENUE CONCENTRATION</span><span className="panel-period">TOP 10 CLIENTS</span></div>{data.concentration.length ? data.concentration.map((item,index) => <div className="concentration-row" key={item.client}><span className="rank mono">{String(index+1).padStart(2,"0")}</span><div className="concentration-main"><div><strong>{item.client}</strong><span className="mono">{money(item.collected,data.currency)}</span></div><div className="insight-track"><span style={{width: `${Math.max(0,Math.min(100,item.share*100))}%`}}/></div></div><span className="share mono">{(item.share*100).toFixed(1)}%</span></div>) : <p className="empty-message">No collected revenue to analyse yet.</p>}</section>{data.unconverted_currencies.length > 0 && <p className="inline-warning">Some amounts are excluded because exchange rates are missing: {data.unconverted_currencies.join(", ")}.</p>}</div>;
+}
