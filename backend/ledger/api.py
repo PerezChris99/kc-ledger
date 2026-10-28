@@ -139,9 +139,22 @@ def csrf_token(request):
 
 @router.post("/auth/login", auth=None)
 def auth_login(request, payload: LoginIn):
-    user = authenticate(request, username=payload.username.strip(), password=payload.password)
+    from django.core.cache import cache
+    from hashlib import sha256
+    username = payload.username.strip()
+    remote = request.META.get("REMOTE_ADDR", "unknown")
+    throttle_key = "ledger-login:" + sha256(f"{remote}:{username.lower()}".encode()).hexdigest()
+    if int(cache.get(throttle_key, 0)) >= 5:
+        raise HttpError(429, "Too many sign-in attempts. Wait 15 minutes and try again.")
+    user = authenticate(request, username=username, password=payload.password)
     if user is None or not user.is_active or not user.is_staff:
+        if not cache.add(throttle_key, 1, timeout=900):
+            try:
+                cache.incr(throttle_key)
+            except ValueError:
+                cache.set(throttle_key, 1, timeout=900)
         raise HttpError(401, "Invalid credentials.")
+    cache.delete(throttle_key)
     login(request, user)
     return {"authenticated": True, "username": user.get_username()}
 
