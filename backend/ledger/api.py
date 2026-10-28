@@ -359,12 +359,12 @@ def dashboard(request):
         row["share"] = float(Decimal(row["collected"])/concentration_total) if concentration_total else 0
     health_rows = [{"id": client.id, "name": client.name, "status": client.status, "score": client.score,
         "company": client.company} for client in Client.objects.order_by("-score", "name")[:8]]
-    today_items = list(attention[:5])
+    today_items = []
     for inst in Instalment.objects.select_related("invoice", "client").filter(due_date__range=(today, today+timedelta(days=3))).exclude(status__in=[Instalment.Status.PAID, Instalment.Status.WAIVED])[:10]:
         today_items.append({"kind": "instalment_due", "title": f"{inst.invoice.number} · {inst.label} due", "client": inst.client.name, "due_date": inst.due_date.isoformat()})
     return {"currency": base, "collected": str(collected), "outstanding": str(outstanding), "overdue": str(overdue),
         "expenses": str(expenses_total), "net_profit": str(collected-expenses_total), "client_count": Client.objects.count(),
-        "invoice_count": len(invoices), "payment_count": Payment.objects.count(), "total_hours": str(TimeEntry.objects.aggregate(total=Sum("hours"))["total"] or Decimal("0")), "attention": today_items[:10],
+        "invoice_count": len(invoices), "payment_count": Payment.objects.count(), "total_hours": str(TimeEntry.objects.aggregate(total=Sum("hours"))["total"] or Decimal("0")), "attention": attention[:10], "today": today_items[:5],
         "revenue_trend": revenue_trend, "invoice_status": invoice_status,
         "aging": [{"bucket": key, "amount": str(value)} for key,value in aging_totals.items()],
         "client_health": health_rows, "concentration": concentration,
