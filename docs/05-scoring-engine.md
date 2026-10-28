@@ -1,8 +1,26 @@
-# Scoring engine
+# Client health scoring engine
 
-compute_client_score accepts a serializable snapshot and returns a deterministic score, eight factor explanations, penalties and a tier. It has no ORM writes. The factor maxima are payment speed 16, on-time rate 16, outstanding risk 10, revenue value 12, loyalty/repeat 8, relationship signals 12, rate health 10 and instalment discipline 16. Penalties are applied after factors: six per disputed invoice, up to 40 for write-off ratio, 14 per chargeback and 12 per abusive event. Blacklisted status forces score zero.
+The scoring engine computes an explainable integer from 0–100. It is a pure service: it receives a snapshot and reference date, performs no ORM writes and returns the total, tier, factor-by-factor explanation and explicit penalties. API handlers persist the cached score separately.
 
-Each factor contains key, label, maximum, points, detail and verdict. Verify formula behaviour with unit tests whenever changing the weights or inputs.
+## Weighted factors
+
+| Factor | Maximum |
+|---|---:|
+| Payment speed | 16 |
+| On-time rate | 16 |
+| Outstanding risk | 10 |
+| Revenue value | 12 |
+| Loyalty and repeat business | 8 |
+| Relationship signals | 12 |
+| Rate health | 10 |
+| Instalment discipline | 16 |
+| **Total before penalties** | **100** |
+
+Penalties are applied after the factors: 6 points per disputed invoice, up to 40 points based on write-off ratio, 14 per chargeback and 12 per abusive event. A blacklisted client receives zero. Plan verdict ratios are Perfect 1.0, Late 0.5, In progress 0.7, At risk 0.2 and Broken 0.0.
+
+## Tiers
+
+Champion 85–100; Reliable 70–84; Neutral 55–69; Caution 40–54; Avoid 0–39. Each factor exposes `key`, `label`, `maximum`, `points`, `detail` and `verdict` so the UI can explain its result.
 
 ## Changelog
-- 2026-10-28: Added deterministic score service and initial tests.
+- 2026-10-28: Implemented the pure scoring service and factor tests.
