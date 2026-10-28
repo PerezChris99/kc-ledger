@@ -276,7 +276,7 @@ def list_invoices(request, status: str = "", q: str = "", limit: int = 50, offse
         items.append({"id": inv.id, "number": inv.number, "title": inv.title, "client_id": inv.client_id,
             "client_name": inv.client.name, "amount": str(inv.amount), "collected": str(paid),
             "outstanding": str(max(Decimal("0"), inv.amount-paid)), "currency": inv.currency,
-            "issue_date": inv.issue_date.isoformat(), "due_date": inv.due_date.isoformat(), "status": inv.status})
+            "issue_date": inv.issue_date.isoformat(), "due_date": inv.due_date.isoformat(), "status": inv.status, "notes": inv.notes})
     return {"items": items, "total": total, "limit": limit, "offset": max(0, offset)}
 
 @router.post("/invoices")
