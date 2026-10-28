@@ -64,13 +64,35 @@ class PaymentIn(Schema):
     note: str = ""
 
 def _client_snapshot(client):
+    from ledger.api_extra import _get_app_settings
+    base = _get_app_settings()["base_currency"]
+
+    def convert(value, currency):
+        currency = currency.upper()
+        if currency == base:
+            return value
+        direct = FxRate.objects.filter(base=currency, quote=base).order_by("-fetched_at").first()
+        if direct:
+            return value * direct.rate
+        inverse = FxRate.objects.filter(base=base, quote=currency).order_by("-fetched_at").first()
+        if inverse and inverse.rate:
+            return value / inverse.rate
+        return None
+
     invoices = []
+    currency_gaps = set()
     for invoice in client.invoices.all():
-        collected = sum((p.amount for p in invoice.payments.all()), Decimal("0"))
-        invoices.append({"id": invoice.id, "number": invoice.number, "amount": invoice.amount,
-            "outstanding": max(Decimal("0"), invoice.amount-collected), "collected": collected,
-            "due_date": invoice.due_date, "paid_on": invoice.paid_at.date() if invoice.paid_at else None,
-            "status": invoice.status})
+        collected_native = sum((p.amount for p in invoice.payments.all()), Decimal("0"))
+        amount_base = convert(invoice.amount, invoice.currency)
+        collected_base = convert(collected_native, invoice.currency)
+        outstanding_base = convert(max(Decimal("0"), invoice.amount-collected_native), invoice.currency)
+        if amount_base is None or collected_base is None or outstanding_base is None:
+            currency_gaps.add(invoice.currency)
+            amount_base = collected_base = outstanding_base = Decimal("0")
+        invoices.append({"id": invoice.id, "number": invoice.number, "amount": amount_base,
+            "outstanding": outstanding_base, "collected": collected_base, "due_date": invoice.due_date,
+            "paid_on": invoice.paid_at.date() if invoice.paid_at else None, "status": invoice.status})
+
     events = list(client.events.filter(deleted_at__isnull=True))
     plans = []
     for invoice in client.invoices.all():
@@ -78,13 +100,26 @@ def _client_snapshot(client):
         if rows:
             plans.append(evaluate_plan_verdict([{"due_date": r.due_date, "paid_on": r.paid_on,
                 "status": r.status, "grace_days": r.grace_days, "amount": r.amount} for r in rows]))
-    return {"status": client.status, "invoices": invoices,
-        "lifetime_collected": sum((p.amount for p in client.payments.all()), Decimal("0")),
+
+    collected_by_client = {}
+    for payment in Payment.objects.select_related("client", "invoice").all():
+        value = convert(payment.amount, payment.invoice.currency)
+        if value is None:
+            currency_gaps.add(payment.invoice.currency)
+            continue
+        collected_by_client[payment.client_id] = collected_by_client.get(payment.client_id, Decimal("0")) + value
+    lifetime_collected = collected_by_client.get(client.id, Decimal("0"))
+    best_client_collected = max(collected_by_client.values(), default=Decimal("0"))
+
+    return {"status": client.status, "invoices": invoices, "lifetime_collected": lifetime_collected,
+        "best_client_collected": best_client_collected, "base_currency": base,
+        "unconverted_currencies": sorted(currency_gaps),
         "engagement_count": client.engagements.count(), "started_at": client.started_at,
         "events": [{"kind": e.kind, "polarity": e.polarity, "weight": e.weight} for e in events],
         "plan_verdicts": plans, "chargebacks": sum(1 for e in events if e.kind == "chargeback"),
         "accepted_rate_increases": sum(1 for e in events if e.kind == "rate_increase_accepted"),
         "haggling_events": sum(1 for e in events if e.kind == "rate_haggling")}
+
 
 def _refresh_score(client):
     result = compute_client_score(_client_snapshot(client))
