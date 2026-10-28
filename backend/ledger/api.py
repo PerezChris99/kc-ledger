@@ -7,7 +7,7 @@ from django.middleware.csrf import get_token
 from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
-from ledger.models import Client, Engagement, Event, Expense, FxRate, Instalment, Invoice, Payment, PaymentAllocation
+from ledger.models import Client, Engagement, Event, Expense, FxRate, Instalment, Invoice, Payment, PaymentAllocation, TimeEntry
 from ledger.services.instalments import allocate_payment_fifo, evaluate_plan_verdict
 from ledger.services.scoring import compute_client_score
 
@@ -316,6 +316,6 @@ def dashboard(request):
     invoice_status = [{"status": status, "count": sum(1 for item in invoices if item.status == status)} for status, _ in Invoice.Status.choices]
     return {"currency": base, "collected": str(collected), "outstanding": str(outstanding), "overdue": str(overdue),
         "expenses": str(expenses_total), "net_profit": str(collected-expenses_total), "client_count": Client.objects.count(),
-        "invoice_count": len(invoices), "payment_count": Payment.objects.count(), "attention": attention[:5],
+        "invoice_count": len(invoices), "payment_count": Payment.objects.count(), "total_hours": str(TimeEntry.objects.aggregate(total=Sum("hours"))["total"] or Decimal("0")), "attention": attention[:5],
         "revenue_trend": revenue_trend, "invoice_status": invoice_status,
         "unconverted_currencies": sorted(unknown)}
