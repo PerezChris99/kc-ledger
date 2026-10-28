@@ -87,11 +87,51 @@ def insights(request):
         "time_entries": TimeEntry.objects.count(), "expenses_count": Expense.objects.count(),
         "unconverted_currencies": sorted(currency_gaps)}
 
+def _target_progress(target):
+    from datetime import date
+    base = _get_app_settings()["base_currency"]
+    today = timezone.localdate()
+    current = Decimal("0")
+    conversion_available = True
+    if target.type == Target.Type.REVENUE:
+        for payment in Payment.objects.select_related("invoice").all():
+            value = payment.amount
+            currency = payment.invoice.currency.upper()
+            if currency != target.currency.upper():
+                direct = FxRate.objects.filter(base=currency, quote=target.currency.upper()).order_by("-fetched_at").first()
+                inverse = FxRate.objects.filter(base=target.currency.upper(), quote=currency).order_by("-fetched_at").first()
+                if direct:
+                    value *= direct.rate
+                elif inverse and inverse.rate:
+                    value /= inverse.rate
+                else:
+                    conversion_available = False
+                    continue
+            current += value
+    elif target.type == Target.Type.CLIENTS:
+        current = Decimal(Client.objects.count())
+    else:
+        current = TimeEntry.objects.aggregate(total=Sum("hours"))["total"] or Decimal("0")
+    progress = min(100.0, float(current/target.amount*100)) if target.amount else 0.0
+    duration = max(1, (target.deadline-target.created_at.date()).days)
+    elapsed = max(0, (today-target.created_at.date()).days)
+    expected = target.amount * Decimal(min(1.0, elapsed/duration))
+    days_remaining = (target.deadline-today).days
+    if target.type == Target.Type.REVENUE and not conversion_available:
+        pace = "fx_missing"
+    else:
+        pace = "on_track" if current >= expected else "behind"
+    return {"current": str(current), "progress_pct": progress, "pace_status": pace,
+        "days_remaining": days_remaining, "conversion_available": conversion_available}
+
 @router.get("/targets")
 def list_targets(request):
-    return {"items": [{"id": t.id, "name": t.name, "type": t.type, "amount": str(t.amount),
-        "currency": t.currency, "deadline": t.deadline.isoformat(), "created_at": t.created_at.isoformat()}
-        for t in Target.objects.order_by("deadline")]}
+    items = []
+    for target in Target.objects.order_by("deadline"):
+        items.append({"id": target.id, "name": target.name, "type": target.type, "amount": str(target.amount),
+            "currency": target.currency, "deadline": target.deadline.isoformat(), "created_at": target.created_at.isoformat(),
+            **_target_progress(target)})
+    return {"items": items}
 
 @router.post("/targets")
 def create_target(request, payload: TargetIn):
