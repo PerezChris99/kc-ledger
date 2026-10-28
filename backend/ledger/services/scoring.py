@@ -112,11 +112,12 @@ def compute_client_score(snapshot: Mapping[str, Any], as_of: date | None = None)
     penalties = []
     disputed = sum(1 for i in invoices if i.get("status") == "disputed")
     writeoff = sum(_money(i.get("amount")) for i in invoices if i.get("status") == "written_off")
+    total_invoiced = sum(_money(i.get("amount")) for i in invoices)
     chargebacks = max(0, int(snapshot.get("chargebacks", 0)))
     abusive = sum(1 for e in events if e.get("kind") == "abusive")
     for key, label, amount in [
         ("disputed_invoices", "Disputed invoices", min(1000, disputed * 6)),
-        ("writeoff_ratio", "Write-off ratio", min(40, 40 * writeoff / billed if billed else 0)),
+        ("writeoff_ratio", "Write-off ratio", min(40, 40 * writeoff / total_invoiced if total_invoiced else 0)),
         ("chargebacks", "Chargebacks", min(1000, chargebacks * 14)),
         ("abusive_events", "Abusive events", min(1000, abusive * 12)),
     ]:
