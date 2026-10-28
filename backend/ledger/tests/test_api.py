@@ -117,3 +117,42 @@ def test_plan_creation_records_schedule_and_metadata(staff_client):
     assert Instalment.objects.filter(invoice=invoice).count() == 2
     assert PlanMeta.objects.filter(invoice=invoice).exists()
     assert Event.objects.filter(invoice=invoice, kind="instalment_plan_created").exists()
+
+
+@pytest.mark.django_db
+def test_plan_edit_preserves_old_rows_as_soft_deleted(staff_client):
+    owner = Client.objects.create(name="Plan Edit Client")
+    invoice = Invoice.objects.create(client=owner, number="PLAN-EDIT-001", title="Project",
+        issue_date=date.today(), due_date=date.today()+timedelta(days=30),
+        amount=Decimal("100.00"), status=Invoice.Status.SENT)
+    first = [
+        {"seq": 1, "label": "First", "amount": "60.00", "due_date": (date.today()+timedelta(days=7)).isoformat(), "grace_days": 3},
+        {"seq": 2, "label": "Final", "amount": "40.00", "due_date": (date.today()+timedelta(days=30)).isoformat(), "grace_days": 3}
+    ]
+    created = staff_client.post("/api/plans", data={"invoice_id":invoice.id,"instalments":first}, content_type="application/json")
+    assert created.status_code == 200
+    second = [
+        {"seq": 1, "label": "Phase A", "amount": "50.00", "due_date": (date.today()+timedelta(days=10)).isoformat(), "grace_days": 2},
+        {"seq": 2, "label": "Phase B", "amount": "50.00", "due_date": (date.today()+timedelta(days=25)).isoformat(), "grace_days": 2}
+    ]
+    edited = staff_client.patch(f"/api/plans/{invoice.id}", data={"invoice_id":invoice.id,"instalments":second}, content_type="application/json")
+    assert edited.status_code == 200
+    assert Instalment.objects.filter(invoice=invoice).count() == 2
+    assert Instalment.all_objects.filter(invoice=invoice, deleted_at__isnull=False).count() == 2
+    assert Event.objects.filter(invoice=invoice, kind="instalment_plan_updated").exists()
+
+@pytest.mark.django_db
+def test_plan_edit_is_blocked_after_allocated_payment(staff_client):
+    owner = Client.objects.create(name="Paid Plan Client")
+    invoice = Invoice.objects.create(client=owner, number="PLAN-LOCK-001", title="Project",
+        issue_date=date.today(), due_date=date.today()+timedelta(days=30),
+        amount=Decimal("100.00"), status=Invoice.Status.SENT)
+    inst = Instalment.objects.create(invoice=invoice, client=owner, seq=1, label="Deposit",
+        amount=Decimal("100.00"), due_date=invoice.due_date)
+    PlanMeta.objects.create(invoice=invoice, plan_deadline=invoice.due_date, last_verdict="in_progress")
+    PaymentAllocation.objects.create(payment=Payment.objects.create(invoice=invoice, client=owner, amount=Decimal("1.00"), paid_on=date.today()), instalment=inst, amount=Decimal("1.00"))
+    response = staff_client.patch(f"/api/plans/{invoice.id}", data={"invoice_id":invoice.id,"instalments":[
+        {"seq":1,"label":"Revised","amount":"99.00","due_date":(date.today()+timedelta(days=14)).isoformat(),"grace_days":3}
+    ]}, content_type="application/json")
+    assert response.status_code == 409
+    assert Instalment.objects.filter(pk=inst.pk).exists()
