@@ -20,6 +20,8 @@ The API is rooted at `/api/`. Private endpoints require an active staff session 
 | `GET/POST /api/targets` | List or create financial targets |
 | `GET/PATCH /api/settings` | Read/update base currency, timezone and notification preferences |
 | `GET /api/notifications` | Poll recent event notifications |
+| `GET /api/clients/{id}/dossier.pdf` | Download a client score and risk dossier |
+| `GET /api/invoices/{id}/pdf` | Download an invoice statement and payment history |
 
 Validation errors return a structured HTTP error. Financial amounts are Decimal values in the backend; the frontend formats them for display. Paid and partial invoice statuses are controlled by the payment workflow, not set directly through the invoice edit endpoint.
 
