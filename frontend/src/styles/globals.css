@@ -36,7 +36,7 @@ button { color: inherit; cursor: pointer; }
 .nav-item.active { border-color: var(--primary-border-soft); background: var(--primary-surface); color: var(--primary); }
 .nav-count { margin-left: auto; color: var(--text-muted); font: 11px var(--font-mono); }
 .sidebar-bottom { margin-top: auto; }
-.target-empty { display: flex; gap: 10px; align-items: center; padding: 13px 10px 22px; }
+.target-empty { width: 100%; border: 0; background: transparent; color: var(--text); text-align: left; display: flex; gap: 10px; align-items: center; padding: 13px 10px 22px; }
 .target-icon { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--border); color: var(--text-muted); }
 .target-empty strong, .target-empty small { display: block; }
 .target-empty strong { font-size: 12px; font-weight: 500; }
@@ -411,3 +411,7 @@ td strong { color: var(--text); font-weight: 500; }
 .kpi-value { font-size: clamp(17px,1.55vw,24px); }
 @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media (max-width: 700px) { .install-button { min-height: 32px; padding: 0 7px; font-size: 11px; } .kpi-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+.target-row-main { min-width: 0; flex: 1; }
+.target-row-main .target-track { max-width: 280px; margin: 9px 0 6px; }
+.target-row-main > small:last-child { color: var(--text-muted); }
