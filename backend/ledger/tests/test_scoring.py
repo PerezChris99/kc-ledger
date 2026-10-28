@@ -1,5 +1,4 @@
 from datetime import date, timedelta
-import pytest
 from ledger.services.scoring import compute_client_score
 
 TODAY = date(2026, 10, 28)
