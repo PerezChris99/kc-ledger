@@ -6,7 +6,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
-from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, Meta, Payment, PaymentAllocation, PlanMeta, Target, TimeEntry
+from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, Meta, Payment, PlanMeta, Target, TimeEntry
 
 router = Router()
 
@@ -215,6 +215,7 @@ def create_plan(request, payload: PlanIn):
         Event.objects.create(client=invoice.client, engagement=invoice.engagement, invoice=invoice, kind="instalment_plan_created",
             category=Event.Category.MONEY, polarity=0, title=f"Instalment plan created for {invoice.number}",
             detail=f"{len(rows)} instalments scheduled; current verdict: {verdict}.", amount=outstanding, occurred_at=timezone.now())
+        from ledger.api import _refresh_score
         score = _refresh_score(invoice.client)
     return {"invoice_id": invoice.id, "invoice_number": invoice.number, "verdict": verdict, "instalment_count": len(rows), "score": score.score}
 
