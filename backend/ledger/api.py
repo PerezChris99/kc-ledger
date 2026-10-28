@@ -190,6 +190,9 @@ def create_invoice(request, payload: InvoiceIn):
         client = Client.objects.get(pk=payload.client_id)
     except Client.DoesNotExist:
         raise HttpError(404, "Client not found.")
+    client_score = compute_client_score(_client_snapshot(client))
+    if client.status == Client.Status.BLACKLISTED or client_score.score < 40:
+        raise HttpError(409, f"Invoice creation blocked: {client.name} is classified {client_score.tier} (score {client_score.score}). Review the client dossier before taking on new work.")
     engagement = None
     if payload.engagement_id:
         try:
