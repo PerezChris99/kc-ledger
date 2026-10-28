@@ -16,6 +16,7 @@ INSTALLED_APPS = [
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -41,11 +42,19 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = os.environ.get("LEDGER_TIME_ZONE", "Africa/Kampala")
 USE_I18N = True
 USE_TZ = True
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
+if not DEBUG:
+    SESSION_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
+    CSRF_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
