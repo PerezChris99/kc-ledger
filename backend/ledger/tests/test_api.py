@@ -156,3 +156,32 @@ def test_plan_edit_is_blocked_after_allocated_payment(staff_client):
     ]}, content_type="application/json")
     assert response.status_code == 409
     assert Instalment.objects.filter(pk=inst.pk).exists()
+
+
+@pytest.mark.django_db
+def test_worklog_records_engagement_time_and_expense(staff_client):
+    owner = Client.objects.create(name="Worklog Client")
+    engagement_response = staff_client.post("/api/engagements", data={
+        "client_id": owner.id, "name": "Build sprint", "kind": "hourly",
+        "agreed_amount": "500.00", "rate": "50.00", "currency": "USD",
+        "start_date": date.today().isoformat(), "status": "active"
+    }, content_type="application/json")
+    assert engagement_response.status_code == 200
+    engagement_id = engagement_response.json()["id"]
+    time_response = staff_client.post("/api/time-entries", data={
+        "engagement_id": engagement_id, "hours": "2.00", "category": "billable",
+        "started_at": f"{date.today().isoformat()}T12:00:00", "note": "Implementation work"
+    }, content_type="application/json")
+    assert time_response.status_code == 200
+    expense_response = staff_client.post("/api/expenses", data={
+        "client_id": owner.id, "engagement_id": engagement_id, "category": "Hosting",
+        "amount": "10.00", "currency": "USD", "spent_on": date.today().isoformat(),
+        "billable": False, "note": "Test expense"
+    }, content_type="application/json")
+    assert expense_response.status_code == 200
+    insights = staff_client.get("/api/insights")
+    assert insights.status_code == 200
+    rate = next(row for row in insights.json()["effective_rates"] if row["client"] == owner.name)
+    assert Decimal(rate["hours"]) == Decimal("2.00")
+    assert Decimal(rate["expenses"]) == Decimal("10.00")
+    assert Decimal(rate["effective_hourly_rate"]) == Decimal("-5.00")
