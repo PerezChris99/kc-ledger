@@ -419,7 +419,7 @@ def list_plans(request):
             "grace_days": r.grace_days, "amount": r.amount} for r in rows])
         items.append({"invoice_id": inv.id, "invoice_number": inv.number, "client_id": inv.client_id,
             "client_name": inv.client.name, "verdict": verdict, "instalments": [{"id": r.id, "seq": r.seq,
-            "label": r.label, "amount": str(r.amount), "due_date": r.due_date.isoformat(), "status": r.status,
+            "label": r.label, "amount": str(r.amount), "due_date": r.due_date.isoformat(), "grace_days": r.grace_days, "status": r.status,
             "paid_on": r.paid_on.isoformat() if r.paid_on else None} for r in rows]})
     return {"items": items}
 
