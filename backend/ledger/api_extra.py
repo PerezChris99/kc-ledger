@@ -10,6 +10,11 @@ from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, M
 
 router = Router()
 
+def _recompute_client_scores():
+    from ledger.api import _refresh_score
+    for client in Client.objects.all():
+        _refresh_score(client)
+
 class SettingsIn(Schema):
     base_currency: str | None = None
     time_zone: str | None = None
@@ -172,6 +177,7 @@ def upsert_fx_rate(request, payload: FxRateIn):
         raise HttpError(422, "Use distinct three-letter currencies and a positive rate.")
     row, _ = FxRate.objects.update_or_create(base=base, quote=quote, defaults={
         "rate": payload.rate, "source": payload.source[:120], "fetched_at": timezone.now()})
+    _recompute_client_scores()
     return {"base": row.base, "quote": row.quote, "rate": str(row.rate), "fetched_at": row.fetched_at.isoformat()}
 
 @router.get("/calendar")
@@ -297,6 +303,7 @@ def update_settings(request, payload: SettingsIn):
     import json
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     values = _get_app_settings()
+    previous_base_currency = values["base_currency"]
     changes = payload.dict(exclude_unset=True)
     if "base_currency" in changes and changes["base_currency"] is not None:
         currency = changes["base_currency"].upper()
@@ -319,6 +326,8 @@ def update_settings(request, payload: SettingsIn):
                 raise HttpError(422, f"Unknown sound category: {key}.")
             values["sounds"][key] = bool(value)
     Meta.objects.update_or_create(key="app_settings", defaults={"value": json.dumps(values, sort_keys=True)})
+    if values["base_currency"] != previous_base_currency:
+        _recompute_client_scores()
     return values
 
 @router.get("/notifications")
