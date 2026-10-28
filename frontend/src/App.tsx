@@ -11,6 +11,7 @@ import InsightsPage from "./features/insights/InsightsPage";
 import AvoidPage from "./features/avoid/AvoidPage";
 import HistoryPage from "./features/history/HistoryPage";
 import SettingsPage from "./features/settings/SettingsPage";
+import NotificationWatcher from "./features/notifications/NotificationWatcher";
 
 type Session = { authenticated: boolean; username: string | null };
 type CalendarResult = { month: string; items: {date:string;kind:string;title:string;client:string;status:string}[] };
