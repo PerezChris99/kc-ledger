@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from django.contrib.auth import authenticate, login, logout
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Sum
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -120,7 +120,13 @@ def list_clients(request, q: str = "", status: str = "", limit: int = 50, offset
 
 @router.post("/clients")
 def create_client(request, payload: ClientIn):
-    client = Client.objects.create(**payload.dict())
+    if payload.status not in Client.Status.values:
+        raise HttpError(422, "Unsupported client status.")
+    values = payload.dict()
+    values["currency"] = values["currency"].upper()
+    if len(values["currency"]) != 3:
+        raise HttpError(422, "Currency must be a three-letter code.")
+    client = Client.objects.create(**values)
     Event.objects.create(client=client, kind="client_created", category=Event.Category.RELATIONSHIP,
         polarity=0, title="Client created", detail="Client record created.", occurred_at=timezone.now())
     result = _refresh_score(client)
@@ -174,6 +180,12 @@ def list_invoices(request, status: str = "", q: str = "", limit: int = 50, offse
 def create_invoice(request, payload: InvoiceIn):
     if payload.amount <= 0:
         raise HttpError(422, "Invoice amount must be positive.")
+    if payload.due_date < payload.issue_date:
+        raise HttpError(422, "Invoice due date cannot precede issue date.")
+    if payload.status not in {Invoice.Status.DRAFT, Invoice.Status.SENT, Invoice.Status.DISPUTED}:
+        raise HttpError(422, "New invoices must be draft, sent, or disputed.")
+    if len(payload.currency) != 3:
+        raise HttpError(422, "Currency must be a three-letter code.")
     try:
         client = Client.objects.get(pk=payload.client_id)
     except Client.DoesNotExist:
@@ -184,7 +196,10 @@ def create_invoice(request, payload: InvoiceIn):
             engagement = Engagement.objects.get(pk=payload.engagement_id, client=client)
         except Engagement.DoesNotExist:
             raise HttpError(422, "Engagement does not belong to this client.")
-    inv = Invoice.objects.create(client=client, engagement=engagement, **payload.dict(exclude={"client_id", "engagement_id"}))
+    try:
+        inv = Invoice.objects.create(client=client, engagement=engagement, **payload.dict(exclude={"client_id", "engagement_id"}, update={"currency": payload.currency.upper()}))
+    except IntegrityError:
+        raise HttpError(409, "An invoice with that number already exists.")
     Event.objects.create(client=client, engagement=engagement, invoice=inv, kind="invoice_created",
         category=Event.Category.MONEY, polarity=0, title=f"Invoice {inv.number} created",
         detail=f"Invoice amount {inv.amount} {inv.currency}.", amount=inv.amount, occurred_at=timezone.now())
@@ -195,6 +210,8 @@ def create_invoice(request, payload: InvoiceIn):
 def record_payment(request, payload: PaymentIn):
     if payload.amount <= 0:
         raise HttpError(422, "Payment amount must be positive.")
+    if payload.paid_on > timezone.localdate():
+        raise HttpError(422, "Payment date cannot be in the future.")
     with transaction.atomic():
         try:
             inv = Invoice.objects.select_for_update().select_related("client").get(pk=payload.invoice_id)
@@ -224,8 +241,9 @@ def record_payment(request, payload: PaymentIn):
                     row.status = Instalment.Status.LATE if payload.paid_on > row.due_date else Instalment.Status.PENDING
                 row.save(update_fields=["status", "paid_on", "updated_at"])
         prior += payload.amount
-        inv.status = Invoice.Status.PAID if prior >= inv.amount else Invoice.Status.PARTIAL
-        if inv.status == Invoice.Status.PAID:
+        was_disputed = inv.status == Invoice.Status.DISPUTED
+        inv.status = Invoice.Status.DISPUTED if was_disputed else Invoice.Status.PAID if prior >= inv.amount else Invoice.Status.PARTIAL
+        if prior >= inv.amount:
             inv.paid_at = timezone.now()
         inv.save(update_fields=["status", "paid_at", "updated_at"])
         Event.objects.create(client=inv.client, engagement=inv.engagement, invoice=inv, payment=payment,
