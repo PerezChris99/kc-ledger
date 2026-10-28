@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bell, CalendarDays, ChevronDown, CircleDollarSign, Clock3, Command, LayoutDashboard, LogOut, Menu, Search, Settings2, ShieldAlert, Users, WalletCards, X, ArrowLeftRight } from "lucide-react";
+import { Activity, CalendarDays, ChevronDown, CircleDollarSign, Clock3, Command, LayoutDashboard, LogOut, Menu, Search, Settings2, ShieldAlert, Users, WalletCards, X, ArrowLeftRight } from "lucide-react";
 import { api, money } from "./api";
 import LoginPage from "./features/auth/LoginPage";
 import DashboardPage from "./features/dashboard/DashboardPage";
@@ -45,7 +45,7 @@ function FxPopover() {
 
 function TargetTracker() {
   const targets=useQuery({queryKey:["targets"],queryFn:()=>api<{items:Target[]}>("/api/targets")});
-  const dashboard=useQuery({queryKey:["dashboard"],queryFn:()=>api<{currency:string;collected:string;client_count:number}>("/api/dashboard")});
+  const dashboard=useQuery({queryKey:["dashboard"],queryFn:()=>api<{currency:string;collected:string;client_count:number;total_hours:string}>("/api/dashboard")});
   const target=targets.data?.items[0];
   if(!target) return <div className="target-empty"><span className="target-icon"><CircleDollarSign size={17}/></span><div><strong>No target set</strong><small>Set one in Settings</small></div></div>;
   const current=target.type==="revenue"?Number(dashboard.data?.collected??0):target.type==="clients"?Number(dashboard.data?.client_count??0):0;
