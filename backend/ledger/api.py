@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from django.contrib.auth import authenticate, login, logout
 from django.db import transaction, IntegrityError
@@ -61,6 +61,52 @@ class PaymentIn(Schema):
     paid_on: date
     method: str = ""
     reference: str = ""
+    note: str = ""
+
+class EngagementIn(Schema):
+    client_id: int
+    name: str
+    kind: str = "fixed"
+    agreed_amount: Decimal = Decimal("0")
+    rate: Decimal | None = None
+    currency: str = "USD"
+    start_date: date | None = None
+    end_date: date | None = None
+    status: str = "active"
+    scope_notes: str = ""
+    revision_limit: int = 0
+    revisions_used: int = 0
+    recurring_interval_days: int = 0
+    next_invoice_date: date | None = None
+
+class EngagementPatch(Schema):
+    name: str | None = None
+    status: str | None = None
+    agreed_amount: Decimal | None = None
+    rate: Decimal | None = None
+    currency: str | None = None
+    end_date: date | None = None
+    scope_notes: str | None = None
+    revision_limit: int | None = None
+    revisions_used: int | None = None
+    recurring_interval_days: int | None = None
+    next_invoice_date: date | None = None
+
+class TimeEntryIn(Schema):
+    engagement_id: int
+    hours: Decimal
+    category: str = "billable"
+    started_at: datetime
+    note: str = ""
+
+class ExpenseIn(Schema):
+    category: str
+    amount: Decimal
+    currency: str = "USD"
+    spent_on: date
+    client_id: int | None = None
+    engagement_id: int | None = None
+    billable: bool = False
     note: str = ""
 
 def _client_snapshot(client):
@@ -422,6 +468,153 @@ def list_plans(request):
             "label": r.label, "amount": str(r.amount), "due_date": r.due_date.isoformat(), "grace_days": r.grace_days, "status": r.status,
             "paid_on": r.paid_on.isoformat() if r.paid_on else None} for r in rows]})
     return {"items": items}
+
+@router.get("/engagements")
+def list_engagements(request, client_id: int | None = None, status: str = "", limit: int = 100):
+    limit = min(max(limit, 1), 200)
+    qs = Engagement.objects.select_related("client").order_by("-created_at")
+    if client_id is not None:
+        qs = qs.filter(client_id=client_id)
+    if status:
+        qs = qs.filter(status=status)
+    return {"items": [{"id": e.id, "client_id": e.client_id, "client_name": e.client.name, "name": e.name,
+        "kind": e.kind, "agreed_amount": str(e.agreed_amount), "rate": str(e.rate) if e.rate is not None else None,
+        "currency": e.currency, "start_date": e.start_date.isoformat() if e.start_date else None,
+        "end_date": e.end_date.isoformat() if e.end_date else None, "status": e.status, "scope_notes": e.scope_notes,
+        "revision_limit": e.revision_limit, "revisions_used": e.revisions_used,
+        "recurring_interval_days": e.recurring_interval_days,
+        "next_invoice_date": e.next_invoice_date.isoformat() if e.next_invoice_date else None}
+        for e in qs[:limit]]}
+
+@router.post("/engagements")
+def create_engagement(request, payload: EngagementIn):
+    if payload.kind not in Engagement.Kind.values or payload.status not in Engagement.Status.values:
+        raise HttpError(422, "Unsupported engagement kind or status.")
+    if payload.agreed_amount < 0 or (payload.rate is not None and payload.rate < 0):
+        raise HttpError(422, "Engagement amounts and rates cannot be negative.")
+    if payload.start_date and payload.end_date and payload.end_date < payload.start_date:
+        raise HttpError(422, "Engagement end date cannot precede its start date.")
+    if payload.recurring_interval_days < 0 or payload.recurring_interval_days > 365:
+        raise HttpError(422, "Recurring interval must be between 0 and 365 days.")
+    if payload.recurring_interval_days and (payload.kind != Engagement.Kind.RETAINER or not payload.next_invoice_date):
+        raise HttpError(422, "Recurring invoices require a retainer engagement and a next invoice date.")
+    try:
+        client = Client.objects.get(pk=payload.client_id)
+    except Client.DoesNotExist:
+        raise HttpError(404, "Client not found.")
+    values = payload.dict(exclude={"client_id"})
+    values["currency"] = values["currency"].upper()
+    if len(values["currency"]) != 3 or not values["currency"].isalpha():
+        raise HttpError(422, "Currency must be a three-letter code.")
+    engagement = Engagement.objects.create(client=client, **values)
+    Event.objects.create(client=client, engagement=engagement, kind="engagement_created", category=Event.Category.DELIVERY,
+        polarity=0, title=f"Engagement created: {engagement.name}", detail=f"Type: {engagement.kind}.",
+        occurred_at=timezone.now())
+    _refresh_score(client)
+    return {"id": engagement.id, "name": engagement.name, "status": engagement.status}
+
+@router.patch("/engagements/{engagement_id}")
+def update_engagement(request, engagement_id: int, payload: EngagementPatch):
+    try:
+        engagement = Engagement.objects.select_related("client").get(pk=engagement_id)
+    except Engagement.DoesNotExist:
+        raise HttpError(404, "Engagement not found.")
+    changes = {key: value for key, value in payload.dict(exclude_unset=True).items() if value is not None}
+    if not changes:
+        raise HttpError(422, "Provide at least one field to update.")
+    if "status" in changes and changes["status"] not in Engagement.Status.values:
+        raise HttpError(422, "Unsupported engagement status.")
+    if "agreed_amount" in changes and changes["agreed_amount"] < 0:
+        raise HttpError(422, "Agreed amount cannot be negative.")
+    if "rate" in changes and changes["rate"] is not None and changes["rate"] < 0:
+        raise HttpError(422, "Rate cannot be negative.")
+    if "currency" in changes:
+        changes["currency"] = changes["currency"].upper()
+        if len(changes["currency"]) != 3 or not changes["currency"].isalpha():
+            raise HttpError(422, "Currency must be a three-letter code.")
+    next_kind = changes.get("kind", engagement.kind)
+    next_interval = changes.get("recurring_interval_days", engagement.recurring_interval_days)
+    next_date = changes.get("next_invoice_date", engagement.next_invoice_date)
+    if next_interval and (next_kind != Engagement.Kind.RETAINER or not next_date):
+        raise HttpError(422, "Recurring invoices require a retainer engagement and a next invoice date.")
+    for key, value in changes.items():
+        setattr(engagement, key, value)
+    engagement.save()
+    Event.objects.create(client=engagement.client, engagement=engagement, kind="engagement_updated",
+        category=Event.Category.DELIVERY, polarity=0, title=f"Engagement updated: {engagement.name}",
+        detail=f"Updated fields: {', '.join(sorted(changes))}.", occurred_at=timezone.now())
+    return {"id": engagement.id, "name": engagement.name, "status": engagement.status}
+
+@router.get("/time-entries")
+def list_time_entries(request, client_id: int | None = None, limit: int = 100):
+    limit = min(max(limit, 1), 200)
+    qs = TimeEntry.objects.select_related("client", "engagement").order_by("-started_at")
+    if client_id is not None:
+        qs = qs.filter(client_id=client_id)
+    return {"items": [{"id": row.id, "client_id": row.client_id, "client_name": row.client.name,
+        "engagement_id": row.engagement_id, "engagement_name": row.engagement.name, "hours": str(row.hours),
+        "category": row.category, "started_at": row.started_at.isoformat(), "note": row.note}
+        for row in qs[:limit]]}
+
+@router.post("/time-entries")
+def create_time_entry(request, payload: TimeEntryIn):
+    if payload.hours <= 0:
+        raise HttpError(422, "Hours must be positive.")
+    if payload.category not in TimeEntry.Category.values:
+        raise HttpError(422, "Unsupported time-entry category.")
+    try:
+        engagement = Engagement.objects.select_related("client").get(pk=payload.engagement_id)
+    except Engagement.DoesNotExist:
+        raise HttpError(404, "Engagement not found.")
+    started_at = payload.started_at
+    if timezone.is_naive(started_at):
+        started_at = timezone.make_aware(started_at, timezone.get_current_timezone())
+    entry = TimeEntry.objects.create(client=engagement.client, engagement=engagement, hours=payload.hours,
+        category=payload.category, started_at=started_at, note=payload.note)
+    Event.objects.create(client=engagement.client, engagement=engagement, kind="time_entry_recorded",
+        category=Event.Category.DELIVERY, polarity=0, title=f"Time recorded: {engagement.name}",
+        detail=f"{entry.hours} hours · {entry.category}. {entry.note}".strip(), occurred_at=timezone.now())
+    return {"id": entry.id, "hours": str(entry.hours), "client_id": entry.client_id}
+
+@router.get("/expenses")
+def list_expenses(request, client_id: int | None = None, limit: int = 100):
+    limit = min(max(limit, 1), 200)
+    qs = Expense.objects.select_related("client", "engagement").order_by("-spent_on")
+    if client_id is not None:
+        qs = qs.filter(client_id=client_id)
+    return {"items": [{"id": row.id, "client_id": row.client_id, "client_name": row.client.name if row.client else None,
+        "engagement_id": row.engagement_id, "engagement_name": row.engagement.name if row.engagement else None,
+        "category": row.category, "amount": str(row.amount), "currency": row.currency, "spent_on": row.spent_on.isoformat(),
+        "billable": row.billable, "note": row.note} for row in qs[:limit]]}
+
+@router.post("/expenses")
+def create_expense(request, payload: ExpenseIn):
+    if payload.amount <= 0:
+        raise HttpError(422, "Expense amount must be positive.")
+    if not payload.category.strip():
+        raise HttpError(422, "Expense category is required.")
+    client = None
+    engagement = None
+    if payload.client_id is not None:
+        client = Client.objects.filter(pk=payload.client_id).first()
+        if client is None:
+            raise HttpError(404, "Client not found.")
+    if payload.engagement_id is not None:
+        engagement = Engagement.objects.select_related("client").filter(pk=payload.engagement_id).first()
+        if engagement is None:
+            raise HttpError(404, "Engagement not found.")
+        if client is not None and engagement.client_id != client.id:
+            raise HttpError(422, "Engagement does not belong to the selected client.")
+        client = client or engagement.client
+    currency = payload.currency.upper()
+    if len(currency) != 3 or not currency.isalpha():
+        raise HttpError(422, "Currency must be a three-letter code.")
+    expense = Expense.objects.create(client=client, engagement=engagement, category=payload.category.strip()[:80],
+        amount=payload.amount, currency=currency, spent_on=payload.spent_on, billable=payload.billable, note=payload.note)
+    Event.objects.create(client=client, engagement=engagement, kind="expense_recorded", category=Event.Category.MONEY,
+        polarity=0, title=f"Expense recorded: {expense.category}", detail=f"{expense.amount} {expense.currency} spent on {expense.spent_on}.",
+        amount=expense.amount, occurred_at=timezone.now())
+    return {"id": expense.id, "amount": str(expense.amount), "currency": expense.currency}
 
 @router.get("/dashboard")
 def dashboard(request):
