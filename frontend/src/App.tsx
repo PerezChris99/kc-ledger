@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bell, CalendarDays, ChevronDown, CircleDollarSign, Clock3, Command, LayoutDashboard, Menu, Search, Settings2, ShieldAlert, Users, WalletCards, X, ArrowLeftRight } from "lucide-react";
+import { Activity, Bell, CalendarDays, ChevronDown, CircleDollarSign, Clock3, Command, LayoutDashboard, LogOut, Menu, Search, Settings2, ShieldAlert, Users, WalletCards, X, ArrowLeftRight } from "lucide-react";
 import { api, money } from "./api";
 import LoginPage from "./features/auth/LoginPage";
 import DashboardPage from "./features/dashboard/DashboardPage";
@@ -80,7 +80,7 @@ export default function App() {
     {moreOpen&&<div className="mobile-more-menu">{nav.slice(4).map(item=><button key={item.id} onClick={()=>{setActive(item.id);setMoreOpen(false);}}>{item.label}</button>)}</div>}
     <main className="main-area">
       <header className="topbar"><div className="global-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")setActive("clients");}} placeholder="Search clients, invoices, payments…" aria-label="Global search"/><kbd><Command size={11}/> K</kbd></div>
-        <div className="topbar-actions"><div className="clock"><Clock3 size={15}/><span>{now.toLocaleTimeString("en-GB",{hour12:false})}</span></div><CalendarPopover/><FxPopover/><button className="icon-button" aria-label="Sign out" onClick={signOut}><Bell size={17}/></button><button className="user-menu" onClick={signOut} aria-label="Sign out"><span className="avatar">KC</span><span className="user-copy"><strong>{session.data.username??"KC"}</strong><small>Owner · Sign out</small></span><ChevronDown size={14}/></button></div>
+        <div className="topbar-actions"><div className="clock"><Clock3 size={15}/><span>{now.toLocaleTimeString("en-GB",{hour12:false})}</span></div><CalendarPopover/><FxPopover/><button className="icon-button" aria-label="Sign out" onClick={signOut}><LogOut size={17}/></button><button className="user-menu" onClick={signOut} aria-label="Sign out"><span className="avatar">KC</span><span className="user-copy"><strong>{session.data.username??"KC"}</strong><small>Owner · Sign out</small></span><ChevronDown size={14}/></button></div>
       </header>
       <section className="page-content"><div className="page-heading"><div><p className="eyebrow">FINANCIAL OPERATIONS / {active.toUpperCase()}</p><h1>{heading}</h1><p className="page-subtitle">A precise view of your client relationships and cash position.</p></div><div className="date-stamp">{now.toLocaleDateString("en-GB",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}</div></div>{page}<footer className="page-footer"><span>KC LEDGER / PRIVATE INSTANCE</span><span>DATA SOURCE: SERVER · SQLITE WAL</span></footer></section>
     </main>
