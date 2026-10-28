@@ -3,10 +3,12 @@
   --bg: #0B0F14; --surface: #111820; --elevated: #161F2A; --input: #0D141C; --hover-row: #1B2530;
   --border: #243140; --border-strong: #2F3F52;
   --text: #E6EDF3; --text-secondary: #9AA7B4; --text-muted: #6B7A8A;
-  --primary: #58A6FF; --primary-hover: #79B8FF; --primary-surface: var(--primary-surface);
-  --success: #3FB950; --success-surface: rgba(63,185,80,.12);
-  --danger: #F85149; --danger-surface: rgba(248,81,73,.12);
-  --warning: #D29922; --warning-surface: rgba(210,153,34,.12); --neutral-badge: #8B949E;
+  --primary: #58A6FF; --primary-hover: #79B8FF; --primary-surface: rgba(88,166,255,.12);
+  --primary-border-soft: rgba(88,166,255,.18); --primary-border: rgba(88,166,255,.35);
+  --success: #3FB950; --success-surface: rgba(63,185,80,.12); --success-border: rgba(63,185,80,.35); --success-border-soft: rgba(63,185,80,.3);
+  --danger: #F85149; --danger-surface: rgba(248,81,73,.12); --danger-border: rgba(248,81,73,.35); --danger-border-soft: rgba(248,81,73,.3); --danger-border-strong: rgba(248,81,73,.45);
+  --warning: #D29922; --warning-surface: rgba(210,153,34,.12); --warning-border: rgba(210,153,34,.4); --warning-border-soft: rgba(210,153,34,.35); --neutral-badge: #8B949E;
+  --surface-glass: rgba(17,24,32,.72); --shadow-backdrop: rgba(0,0,0,.5);
   --chart-grid: #263241; --chart-revenue: #58A6FF; --chart-profit: #3FB950; --chart-loss: #F85149; --chart-forecast: #D29922;
   --focus-ring: #58A6FF; --backdrop: rgba(0,0,0,.65);
   --sidebar-bg: #0D1218;
@@ -194,7 +196,7 @@ td strong { color: var(--text); font-weight: 500; }
 .status-pill.paid, .status-pill.active, .verdict-pill.perfect, .verdict-pill.reliable { border-color: var(--success-border); color: var(--success); background: var(--success-surface); }
 .status-pill.overdue, .status-pill.disputed, .status-pill.blacklisted, .status-pill.written_off, .verdict-pill.broken { border-color: var(--danger-border); color: var(--danger); background: var(--danger-surface); }
 .status-pill.partial, .status-pill.sent, .verdict-pill.in_progress { border-color: var(--primary-border); color: var(--primary); background: var(--primary-surface); }
-.status-pill.late, .status-pill.missed, .verdict-pill.at_risk, .verdict-pill.caution { border-color: rgba(210,153,34,.35); color: var(--warning); background: var(--warning-surface); }
+.status-pill.late, .status-pill.missed, .verdict-pill.at_risk, .verdict-pill.caution { border-color: var(--warning-border-soft); color: var(--warning); background: var(--warning-surface); }
 .small-button, .text-button { min-height: 32px; padding: 5px 8px; border: 1px solid var(--border-strong); background: transparent; color: var(--primary); font-size: 11px; white-space: nowrap; }
 .small-button:hover, .text-button:hover { background: var(--primary-surface); }
 .empty-message { margin: 0; padding: 20px; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
@@ -218,7 +220,7 @@ td strong { color: var(--text); font-weight: 500; }
 .event-row time, .event-meta time { display: block; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
 .event-polarity { display: grid; place-items: center; width: 26px; height: 26px; flex: 0 0 26px; border: 1px solid var(--border); color: var(--text-muted); font: 14px var(--font-mono); }
 .event-polarity.negative { border-color: var(--danger-border-soft); color: var(--danger); }
-.event-polarity.positive { border-color: rgba(63,185,80,.3); color: var(--success); }
+.event-polarity.positive { border-color: var(--success-border-soft); color: var(--success); }
 .event-main { min-width: 0; flex: 1; }
 .event-main > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .event-main small { display: block; margin-top: 6px; color: var(--text-muted); font-size: 11px; }
