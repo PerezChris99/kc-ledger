@@ -105,7 +105,8 @@ def _client_snapshot(client):
     for payment in Payment.objects.select_related("client", "invoice").all():
         value = convert(payment.amount, payment.invoice.currency)
         if value is None:
-            currency_gaps.add(payment.invoice.currency)
+            if payment.client_id == client.id:
+                currency_gaps.add(payment.invoice.currency)
             continue
         collected_by_client[payment.client_id] = collected_by_client.get(payment.client_id, Decimal("0")) + value
     lifetime_collected = collected_by_client.get(client.id, Decimal("0"))
