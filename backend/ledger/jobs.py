@@ -98,12 +98,15 @@ def draft_recurring_invoices():
         recurring_interval_days__gt=0, next_invoice_date__lte=today
     ):
         number = f"RET-{engagement.id}-{today.strftime('%Y%m%d')}"
-        invoice, created = Invoice.objects.get_or_create(number=number, defaults={
+        invoice, created = Invoice.all_objects.get_or_create(number=number, defaults={
             "client": engagement.client, "engagement": engagement, "title": f"{engagement.name} retainer",
             "issue_date": today, "due_date": today + timedelta(days=14),
             "amount": engagement.agreed_amount, "currency": engagement.currency, "status": Invoice.Status.DRAFT,
             "notes": "Automatically drafted recurring invoice; review before sending."
         })
+        if invoice.deleted_at:
+            invoice.deleted_at = None
+            invoice.save(update_fields=["deleted_at", "updated_at"])
         engagement.next_invoice_date = today + timedelta(days=engagement.recurring_interval_days)
         engagement.save(update_fields=["next_invoice_date", "updated_at"])
         if created:
