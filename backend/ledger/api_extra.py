@@ -442,7 +442,7 @@ def update_plan(request, invoice_id: int, payload: PlanIn):
             meta.deleted_at = None
             meta.plan_deadline = max(item.due_date for item in rows)
             meta.last_verdict = verdict
-            meta.notes = payload.notes
+            meta.notes = payload.notes or meta.notes
             meta.save()
         else:
             PlanMeta.objects.create(invoice=invoice, plan_deadline=max(item.due_date for item in rows), last_verdict=verdict, notes=payload.notes)
