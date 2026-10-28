@@ -6,6 +6,7 @@ services:
     env_file: .env
     environment:
       LEDGER_DB_PATH: /app/data/ledger.sqlite3
+      RUN_SCHEDULER: "1"
     volumes:
       - ledger_data:/app/data
     expose: ["8000"]
