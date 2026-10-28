@@ -81,8 +81,8 @@ def _client_snapshot(client):
 
     invoices = []
     currency_gaps = set()
-    for invoice in client.invoices.all():
-        collected_native = sum((p.amount for p in invoice.payments.all()), Decimal("0"))
+    for invoice in client.invoices.annotate(paid_total=Sum("payments__amount")):
+        collected_native = invoice.paid_total or Decimal("0")
         amount_base = convert(invoice.amount, invoice.currency)
         collected_base = convert(collected_native, invoice.currency)
         outstanding_base = convert(max(Decimal("0"), invoice.amount-collected_native), invoice.currency)
@@ -192,8 +192,8 @@ def client_detail(request, client_id: int):
         raise HttpError(404, "Client not found.")
     score = compute_client_score(_client_snapshot(client)).as_dict()
     invoices = []
-    for inv in client.invoices.select_related("engagement").all():
-        paid = inv.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    for inv in client.invoices.select_related("engagement").annotate(paid_total=Sum("payments__amount")):
+        paid = inv.paid_total or Decimal("0")
         invoices.append({"id": inv.id, "number": inv.number, "title": inv.title, "issue_date": inv.issue_date.isoformat(),
             "due_date": inv.due_date.isoformat(), "amount": str(inv.amount), "collected": str(paid),
             "outstanding": str(max(Decimal("0"), inv.amount-paid)), "currency": inv.currency, "status": inv.status,
@@ -251,7 +251,7 @@ def archive_client(request, client_id: int):
 def list_invoices(request, status: str = "", q: str = "", limit: int = 50, offset: int = 0):
     from django.db.models import Q
     limit = min(max(limit, 1), 100)
-    qs = Invoice.objects.select_related("client").all()
+    qs = Invoice.objects.select_related("client").annotate(paid_total=Sum("payments__amount"))
     if status:
         qs = qs.filter(status=status)
     if q.strip():
@@ -259,7 +259,7 @@ def list_invoices(request, status: str = "", q: str = "", limit: int = 50, offse
     total = qs.count()
     items = []
     for inv in qs.order_by("-issue_date", "-id")[offset:offset+limit]:
-        paid = inv.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        paid = inv.paid_total or Decimal("0")
         items.append({"id": inv.id, "number": inv.number, "title": inv.title, "client_id": inv.client_id,
             "client_name": inv.client.name, "amount": str(inv.amount), "collected": str(paid),
             "outstanding": str(max(Decimal("0"), inv.amount-paid)), "currency": inv.currency,
@@ -398,7 +398,7 @@ def record_payment(request, payload: PaymentIn):
 @router.get("/plans")
 def list_plans(request):
     items = []
-    for inv in Invoice.objects.select_related("client").all():
+    for inv in Invoice.objects.select_related("client").prefetch_related("instalments").all():
         rows = list(inv.instalments.all())
         if not rows:
             continue
@@ -426,9 +426,9 @@ def dashboard(request):
         return value / inverse.rate if inverse and inverse.rate else None
     collected = outstanding = overdue = expenses_total = Decimal("0")
     unknown = set()
-    invoices = list(Invoice.objects.select_related("client"))
+    invoices = list(Invoice.objects.select_related("client").annotate(paid_total=Sum("payments__amount")))
     for inv in invoices:
-        paid = inv.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        paid = inv.paid_total or Decimal("0")
         paid_base, balance_base = convert(paid, inv.currency), convert(max(Decimal("0"), inv.amount-paid), inv.currency)
         if paid_base is None or balance_base is None:
             unknown.add(inv.currency)
