@@ -46,7 +46,7 @@ def list_events(request, category: str = "", q: str = "", limit: int = 100, offs
 
 @router.get("/insights")
 def insights(request):
-    base = __import__("os").environ.get("LEDGER_BASE_CURRENCY", "USD").upper()
+    base = _get_app_settings()["base_currency"]
     today = timezone.localdate()
     buckets = {"not_due": Decimal("0"), "1_30": Decimal("0"), "31_60": Decimal("0"), "61_plus": Decimal("0")}
     currency_gaps = set()
@@ -237,7 +237,7 @@ def _get_app_settings():
     if row:
         try:
             stored = json.loads(row.value)
-            defaults.update({key: value for key, value in stored.items() if key in DEFAULT_APP_SETTINGS})
+            defaults.update({key: value for key, value in stored.items() if key in DEFAULT_APP_SETTINGS and key != "sounds"})
             if isinstance(stored.get("sounds"), dict):
                 defaults["sounds"].update({key: bool(value) for key, value in stored["sounds"].items() if key in defaults["sounds"]})
         except (ValueError, TypeError):
