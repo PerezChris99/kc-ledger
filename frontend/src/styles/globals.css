@@ -385,3 +385,20 @@ td strong { color: var(--text); font-weight: 500; }
   .dashboard-grid .span-4, .dashboard-grid .span-6, .dashboard-grid .span-8, .dashboard-grid .span-12 { grid-column: auto; }
   .doughnut-wrap { height: 230px; }
 }
+
+.settings-toggle { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.settings-toggle strong, .settings-toggle small { display: block; }
+.settings-toggle strong { color: var(--text); font-size: 12px; font-weight: 500; }
+.settings-toggle small { max-width: 330px; margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.settings-toggle input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--primary); }
+.notification-permission { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; color: var(--text-muted); font-size: 11px; }
+.notification-stack { position: fixed; z-index: 80; top: 72px; right: 18px; display: grid; gap: 8px; width: min(390px,calc(100vw - 36px)); pointer-events: none; }
+.notification-toast { display: flex; align-items: start; gap: 10px; padding: 13px; border: 1px solid var(--border-strong); background: var(--elevated); box-shadow: 0 8px 24px var(--backdrop); pointer-events: auto; }
+.notification-toast-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border: 1px solid var(--border); color: var(--primary); }
+.notification-toast > div { min-width: 0; flex: 1; }
+.notification-toast strong { display: block; color: var(--text); font-size: 12px; font-weight: 600; }
+.notification-toast p { margin: 5px 0; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.notification-toast time { color: var(--text-muted); font: 11px var(--font-mono); }
+.notification-toast button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; background: transparent; color: var(--text-muted); }
+.notification-toast button:hover { color: var(--text); background: var(--hover-row); }
+@media (max-width: 700px) { .notification-stack { top: 60px; right: 8px; width: calc(100vw - 16px); } }
