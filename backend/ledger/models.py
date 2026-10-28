@@ -222,7 +222,21 @@ class Expense(SoftDeleteModel):
         constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name="expense_amount_positive")]
 
 
+class ImmutableEventQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Audit events are append-only and cannot be updated.")
+
+    def delete(self):
+        raise ValidationError("Audit events cannot be physically deleted.")
+
+
+class ImmutableEventManager(models.Manager.from_queryset(ImmutableEventQuerySet)):
+    pass
+
+
 class Event(models.Model):
+    objects = ImmutableEventManager()
+
     class Category(models.TextChoices):
         MONEY = "money", "Money"
         BEHAVIOUR = "behaviour", "Behaviour"
