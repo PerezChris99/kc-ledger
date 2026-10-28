@@ -10,7 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from django.db import transaction
 from django.utils import timezone
 
-from ledger.models import Client, Engagement, Event, FxRate, Instalment, Invoice, Payment, PlanMeta
+from ledger.models import Client, Engagement, Event, FxRate, Instalment, Invoice, PlanMeta
 from ledger.services.instalments import evaluate_plan_verdict
 
 logger = logging.getLogger(__name__)
