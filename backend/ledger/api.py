@@ -7,7 +7,7 @@ from django.middleware.csrf import get_token
 from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
-from ledger.models import Client, Engagement, Event, Expense, FxRate, Instalment, Invoice, Payment, PaymentAllocation, TimeEntry
+from ledger.models import Client, Engagement, Event, Expense, FxRate, Instalment, Invoice, Payment, PaymentAllocation, PlanMeta, TimeEntry
 from ledger.services.instalments import allocate_payment_fifo, evaluate_plan_verdict
 from ledger.services.scoring import compute_client_score
 
@@ -230,6 +230,8 @@ def record_payment(request, payload: PaymentIn):
         payment = Payment.objects.create(invoice=inv, client=inv.client, amount=payload.amount,
             paid_on=payload.paid_on, method=payload.method, reference=payload.reference, note=payload.note)
         rows = list(inv.instalments.all())
+        prior_verdict = evaluate_plan_verdict([{"due_date": r.due_date, "paid_on": r.paid_on, "status": r.status,
+            "grace_days": r.grace_days, "amount": r.amount} for r in rows]) if rows else None
         allocation = {"allocations": [], "unallocated": payload.amount}
         if rows:
             existing = PaymentAllocation.objects.filter(instalment__in=rows).values("instalment_id").annotate(total=Sum("amount"))
@@ -254,6 +256,21 @@ def record_payment(request, payload: PaymentIn):
         Event.objects.create(client=inv.client, engagement=inv.engagement, invoice=inv, payment=payment,
             kind="payment_recorded", category=Event.Category.MONEY, polarity=1, title=f"Payment recorded for {inv.number}",
             detail=f"Recorded {payload.amount} {inv.currency}.", amount=payload.amount, occurred_at=timezone.now())
+        if rows:
+            current_rows = list(inv.instalments.all())
+            new_verdict = evaluate_plan_verdict([{"due_date": r.due_date, "paid_on": r.paid_on, "status": r.status,
+                "grace_days": r.grace_days, "amount": r.amount} for r in current_rows])
+            if prior_verdict != new_verdict:
+                plan_meta = PlanMeta.objects.filter(invoice=inv).first()
+                if plan_meta:
+                    plan_meta.last_verdict = new_verdict
+                    plan_meta.save(update_fields=["last_verdict", "updated_at"])
+                polarity = 1 if new_verdict == "perfect" else -1 if new_verdict in {"late", "at_risk", "broken"} else 0
+                Event.objects.create(client=inv.client, engagement=inv.engagement, invoice=inv,
+                    kind=f"plan_verdict_{new_verdict}", category=Event.Category.MONEY, polarity=polarity,
+                    title=f"Plan verdict changed: {new_verdict.replace('_', ' ')}",
+                    detail=f"{inv.number}: {prior_verdict.replace('_', ' ')} → {new_verdict.replace('_', ' ')}.",
+                    occurred_at=timezone.now())
         score = _refresh_score(inv.client)
     return {"payment_id": payment.id, "invoice_status": inv.status, "score": score.score,
         "allocation": [{"instalment_id": a["instalment_id"], "amount": str(a["amount"])} for a in allocation["allocations"]],
