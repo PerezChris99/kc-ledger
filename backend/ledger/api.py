@@ -196,8 +196,10 @@ def create_invoice(request, payload: InvoiceIn):
             engagement = Engagement.objects.get(pk=payload.engagement_id, client=client)
         except Engagement.DoesNotExist:
             raise HttpError(422, "Engagement does not belong to this client.")
+    invoice_values = payload.dict(exclude={"client_id", "engagement_id"})
+    invoice_values["currency"] = payload.currency.upper()
     try:
-        inv = Invoice.objects.create(client=client, engagement=engagement, **payload.dict(exclude={"client_id", "engagement_id"}, update={"currency": payload.currency.upper()}))
+        inv = Invoice.objects.create(client=client, engagement=engagement, **invoice_values)
     except IntegrityError:
         raise HttpError(409, "An invoice with that number already exists.")
     Event.objects.create(client=client, engagement=engagement, invoice=inv, kind="invoice_created",
