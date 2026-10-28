@@ -73,7 +73,7 @@ def insights(request):
 
     for invoice in Invoice.objects.select_related("client").annotate(paid_total=Sum("payments__amount")):
         paid = invoice.paid_total or Decimal("0")
-        balance = max(Decimal("0"), invoice.amount-paid)
+        balance = Decimal("0") if invoice.status == Invoice.Status.WRITTEN_OFF else max(Decimal("0"), invoice.amount-paid)
         if balance <= 0:
             continue
         value = convert(balance, invoice.currency)
@@ -412,7 +412,7 @@ def export_client_dossier(request, client_id: int):
         paid = invoice.paid_total or Decimal("0")
         invoices.append({"number": invoice.number, "title": invoice.title, "due_date": invoice.due_date,
             "status": invoice.status, "currency": invoice.currency, "amount": invoice.amount,
-            "outstanding": max(Decimal("0"), invoice.amount-paid)})
+            "outstanding": Decimal("0") if invoice.status == Invoice.Status.WRITTEN_OFF else max(Decimal("0"), invoice.amount-paid)})
     events = list(client.events.filter(deleted_at__isnull=True).order_by("-occurred_at")[:250])
     html = render_to_string("ledger/client_dossier.html", {
         "client": client, "score": score, "invoices": invoices, "events": events,
@@ -440,7 +440,7 @@ def export_invoice_pdf(request, invoice_id: int):
     instalments = list(invoice.instalments.order_by("seq"))
     html = render_to_string("ledger/invoice.html", {
         "invoice": invoice, "payments": payments, "instalments": instalments,
-        "collected": f"{paid:.2f}", "outstanding": f"{max(Decimal('0'), invoice.amount-paid):.2f}",
+        "collected": f"{paid:.2f}", "outstanding": f"{(Decimal('0') if invoice.status == Invoice.Status.WRITTEN_OFF else max(Decimal('0'), invoice.amount-paid)):.2f}",
         "generated_at": timezone.localtime().strftime("%Y-%m-%d %H:%M %Z"),
     })
     pdf = HTML(string=html, base_url=str(django_settings.BASE_DIR)).write_pdf()
