@@ -476,7 +476,7 @@ def dashboard(request):
     aging_totals = {"not_due": Decimal("0"), "1_30": Decimal("0"), "31_60": Decimal("0"), "61_plus": Decimal("0")}
     client_revenue = {}
     for inv in invoices:
-        paid = inv.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        paid = inv.paid_total or Decimal("0")
         balance = max(Decimal("0"), inv.amount-paid)
         value = convert(balance, inv.currency)
         if value is not None:
