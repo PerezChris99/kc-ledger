@@ -39,6 +39,22 @@ class InvoiceIn(Schema):
     status: str = "sent"
     notes: str = ""
 
+class ClientPatch(Schema):
+    name: str | None = None
+    company: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    country: str | None = None
+    currency: str | None = None
+    status: str | None = None
+    notes: str | None = None
+
+class InvoicePatch(Schema):
+    title: str | None = None
+    due_date: date | None = None
+    status: str | None = None
+    notes: str | None = None
+
 class PaymentIn(Schema):
     invoice_id: int
     amount: Decimal
@@ -157,6 +173,44 @@ def client_detail(request, client_id: int):
         "engagements": [{"id": e.id, "name": e.name, "kind": e.kind, "status": e.status,
             "amount": str(e.agreed_amount), "currency": e.currency} for e in client.engagements.all()]}
 
+@router.patch("/clients/{client_id}")
+def update_client(request, client_id: int, payload: ClientPatch):
+    try:
+        client = Client.objects.get(pk=client_id)
+    except Client.DoesNotExist:
+        raise HttpError(404, "Client not found.")
+    changes = {key: value for key, value in payload.dict(exclude_unset=True).items() if value is not None}
+    if not changes:
+        raise HttpError(422, "Provide at least one field to update.")
+    if "status" in changes and changes["status"] not in Client.Status.values:
+        raise HttpError(422, "Unsupported client status.")
+    if "currency" in changes:
+        changes["currency"] = changes["currency"].upper()
+        if len(changes["currency"]) != 3:
+            raise HttpError(422, "Currency must be a three-letter code.")
+    for key, value in changes.items():
+        setattr(client, key, value)
+    client.save()
+    Event.objects.create(client=client, kind="client_updated", category=Event.Category.RELATIONSHIP,
+        polarity=0, title="Client record updated", detail=f"Updated fields: {', '.join(sorted(changes))}.",
+        occurred_at=timezone.now())
+    score = _refresh_score(client)
+    return {"id": client.id, "name": client.name, "status": client.status, "score": score.score}
+
+@router.delete("/clients/{client_id}")
+def archive_client(request, client_id: int):
+    try:
+        client = Client.objects.get(pk=client_id)
+    except Client.DoesNotExist:
+        raise HttpError(404, "Client not found.")
+    Event.objects.create(client=client, kind="client_archived", category=Event.Category.RELATIONSHIP,
+        polarity=0, title="Client archived", detail="Client record was soft-deleted; related financial history is retained.",
+        occurred_at=timezone.now())
+    client.status = Client.Status.ARCHIVED
+    client.save(update_fields=["status", "updated_at"])
+    client.soft_delete()
+    return {"id": client.id, "archived": True}
+
 @router.get("/invoices")
 def list_invoices(request, status: str = "", q: str = "", limit: int = 50, offset: int = 0):
     from django.db.models import Q
@@ -210,6 +264,35 @@ def create_invoice(request, payload: InvoiceIn):
         detail=f"Invoice amount {inv.amount} {inv.currency}.", amount=inv.amount, occurred_at=timezone.now())
     _refresh_score(client)
     return {"id": inv.id, "number": inv.number, "status": inv.status}
+
+@router.patch("/invoices/{invoice_id}")
+def update_invoice(request, invoice_id: int, payload: InvoicePatch):
+    try:
+        invoice = Invoice.objects.select_related("client").get(pk=invoice_id)
+    except Invoice.DoesNotExist:
+        raise HttpError(404, "Invoice not found.")
+    changes = {key: value for key, value in payload.dict(exclude_unset=True).items() if value is not None}
+    if not changes:
+        raise HttpError(422, "Provide at least one field to update.")
+    if "due_date" in changes and changes["due_date"] < invoice.issue_date:
+        raise HttpError(422, "Invoice due date cannot precede issue date.")
+    allowed = {Invoice.Status.DRAFT, Invoice.Status.SENT, Invoice.Status.DISPUTED, Invoice.Status.WRITTEN_OFF}
+    if "status" in changes:
+        if changes["status"] not in allowed:
+            raise HttpError(422, "Paid and partial statuses are managed by the payment workflow.")
+        if changes["status"] == Invoice.Status.WRITTEN_OFF and invoice.status != Invoice.Status.WRITTEN_OFF:
+            Event.objects.create(client=invoice.client, engagement=invoice.engagement, invoice=invoice,
+                kind="invoice_written_off", category=Event.Category.MONEY, polarity=-1,
+                title=f"Invoice {invoice.number} written off", detail=f"Written-off amount {invoice.amount} {invoice.currency}.",
+                amount=invoice.amount, occurred_at=timezone.now())
+    for key, value in changes.items():
+        setattr(invoice, key, value)
+    invoice.save()
+    Event.objects.create(client=invoice.client, engagement=invoice.engagement, invoice=invoice,
+        kind="invoice_updated", category=Event.Category.MONEY, polarity=0, title=f"Invoice {invoice.number} updated",
+        detail=f"Updated fields: {', '.join(sorted(changes))}.", occurred_at=timezone.now())
+    score = _refresh_score(invoice.client)
+    return {"id": invoice.id, "number": invoice.number, "status": invoice.status, "score": score.score}
 
 @router.post("/payments")
 def record_payment(request, payload: PaymentIn):
