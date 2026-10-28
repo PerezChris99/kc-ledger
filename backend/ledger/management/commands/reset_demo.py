@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from ledger.models import Client, Engagement, Expense, Instalment, Invoice, Payment, Target, TimeEntry
+from ledger.models import Client, Engagement, Expense, Instalment, Invoice, Payment, TimeEntry
 
 class Command(BaseCommand):
     help = "Soft-delete demo records only; append-only audit events remain intact."
