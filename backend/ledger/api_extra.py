@@ -51,8 +51,8 @@ def insights(request):
     buckets = {"not_due": Decimal("0"), "1_30": Decimal("0"), "31_60": Decimal("0"), "61_plus": Decimal("0")}
     currency_gaps = set()
     concentration = {}
-    for invoice in Invoice.objects.select_related("client").all():
-        paid = invoice.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    for invoice in Invoice.objects.select_related("client").annotate(paid_total=Sum("payments__amount")):
+        paid = invoice.paid_total or Decimal("0")
         balance = max(Decimal("0"), invoice.amount-paid)
         if balance <= 0:
             continue
