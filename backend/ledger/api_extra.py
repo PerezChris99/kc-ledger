@@ -55,42 +55,75 @@ def insights(request):
     today = timezone.localdate()
     buckets = {"not_due": Decimal("0"), "1_30": Decimal("0"), "31_60": Decimal("0"), "61_plus": Decimal("0")}
     currency_gaps = set()
-    concentration = {}
+    collected_by_client = {}
+    expense_by_client = {}
+    hours_by_client = {}
+
+    def convert(value, currency):
+        currency = currency.upper()
+        if currency == base:
+            return value
+        direct = FxRate.objects.filter(base=currency, quote=base).order_by("-fetched_at").first()
+        inverse = FxRate.objects.filter(base=base, quote=currency).order_by("-fetched_at").first()
+        if direct:
+            return value * direct.rate
+        if inverse and inverse.rate:
+            return value / inverse.rate
+        return None
+
     for invoice in Invoice.objects.select_related("client").annotate(paid_total=Sum("payments__amount")):
         paid = invoice.paid_total or Decimal("0")
         balance = max(Decimal("0"), invoice.amount-paid)
         if balance <= 0:
             continue
-        rate = Decimal("1") if invoice.currency == base else None
-        if rate is None:
-            fx = FxRate.objects.filter(base=invoice.currency, quote=base).order_by("-fetched_at").first()
-            inv = FxRate.objects.filter(base=base, quote=invoice.currency).order_by("-fetched_at").first()
-            if fx: rate = fx.rate
-            elif inv and inv.rate: rate = Decimal("1")/inv.rate
-        if rate is None:
+        value = convert(balance, invoice.currency)
+        if value is None:
             currency_gaps.add(invoice.currency)
             continue
-        balance *= rate
         age = (today-invoice.due_date).days
         key = "not_due" if age <= 0 else "1_30" if age <= 30 else "31_60" if age <= 60 else "61_plus"
-        buckets[key] += balance
+        buckets[key] += value
+
     for payment in Payment.objects.select_related("client", "invoice").all():
-        if payment.invoice.currency != base:
-            fx = FxRate.objects.filter(base=payment.invoice.currency, quote=base).order_by("-fetched_at").first()
-            inv = FxRate.objects.filter(base=base, quote=payment.invoice.currency).order_by("-fetched_at").first()
-            if fx: value = payment.amount*fx.rate
-            elif inv and inv.rate: value = payment.amount/inv.rate
-            else:
-                currency_gaps.add(payment.invoice.currency)
-                continue
-        else: value = payment.amount
-        concentration[payment.client.name] = concentration.get(payment.client.name, Decimal("0")) + value
-    total_collected = sum(concentration.values(), Decimal("0"))
-    top = sorted(concentration.items(), key=lambda x: x[1], reverse=True)[:10]
+        value = convert(payment.amount, payment.invoice.currency)
+        if value is None:
+            currency_gaps.add(payment.invoice.currency)
+            continue
+        row = collected_by_client.setdefault(payment.client_id, {"name": payment.client.name, "amount": Decimal("0")})
+        row["amount"] += value
+
+    for expense in Expense.objects.select_related("client").all():
+        if not expense.client_id:
+            continue
+        value = convert(expense.amount, expense.currency)
+        if value is None:
+            currency_gaps.add(expense.currency)
+            continue
+        expense_by_client[expense.client_id] = expense_by_client.get(expense.client_id, Decimal("0")) + value
+
+    for entry in TimeEntry.objects.select_related("client").all():
+        hours_by_client[entry.client_id] = hours_by_client.get(entry.client_id, Decimal("0")) + entry.hours
+
+    total_collected = sum((row["amount"] for row in collected_by_client.values()), Decimal("0"))
+    top = sorted(collected_by_client.values(), key=lambda row: row["amount"], reverse=True)[:10]
+    concentration_rows = [{"client": row["name"], "collected": str(row["amount"]),
+        "share": float(row["amount"]/total_collected) if total_collected else 0} for row in top]
+    effective_rates = []
+    for client_id, hours in hours_by_client.items():
+        if hours <= 0:
+            continue
+        collected = collected_by_client.get(client_id, {}).get("amount", Decimal("0"))
+        expenses = expense_by_client.get(client_id, Decimal("0"))
+        net = collected-expenses
+        client_name = collected_by_client.get(client_id, {}).get("name") or Client.objects.filter(pk=client_id).values_list("name", flat=True).first() or "Unknown client"
+        effective_rates.append({"client": client_name, "hours": str(hours), "collected": str(collected),
+            "expenses": str(expenses), "net_contribution": str(net), "effective_hourly_rate": str(net/hours), "currency": base})
+    effective_rates.sort(key=lambda row: Decimal(row["effective_hourly_rate"]), reverse=True)
     return {"currency": base, "aging": [{"bucket": k, "amount": str(v)} for k, v in buckets.items()],
-        "concentration": [{"client": k, "collected": str(v), "share": float(v/total_collected) if total_collected else 0} for k,v in top],
+        "concentration": concentration_rows, "effective_rates": effective_rates[:10],
         "time_entries": TimeEntry.objects.count(), "expenses_count": Expense.objects.count(),
         "unconverted_currencies": sorted(currency_gaps)}
+
 
 def _target_progress(target):
     today = timezone.localdate()
