@@ -1,11 +1,12 @@
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal
+from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
-from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, Payment, Target, TimeEntry
+from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, Payment, PaymentAllocation, PlanMeta, Target, TimeEntry
 
 router = Router()
 
@@ -161,3 +162,51 @@ def avoid_clients(request):
             "invoices": len(client.invoices.all()), "lifetime_collected": str(sum((p.amount for p in client.payments.all()), Decimal("0")))})
     unique = {item["id"]: item for item in result}
     return {"items": sorted(unique.values(), key=lambda item: item["score"])}
+
+
+class InstalmentRowIn(Schema):
+    seq: int
+    label: str
+    amount: Decimal
+    due_date: date
+    grace_days: int = 0
+
+class PlanIn(Schema):
+    invoice_id: int
+    instalments: list[InstalmentRowIn]
+    notes: str = ""
+
+@router.post("/plans")
+def create_plan(request, payload: PlanIn):
+    if not payload.instalments:
+        raise HttpError(422, "A plan must contain at least one instalment.")
+    rows = sorted(payload.instalments, key=lambda item: (item.due_date, item.seq))
+    sequences = [item.seq for item in rows]
+    if any(seq < 1 for seq in sequences) or len(set(sequences)) != len(sequences):
+        raise HttpError(422, "Instalment sequence numbers must be unique positive integers.")
+    if any(item.amount <= 0 or item.grace_days < 0 or item.grace_days > 60 for item in rows):
+        raise HttpError(422, "Amounts must be positive and grace periods must be between 0 and 60 days.")
+    if any(rows[index].due_date > rows[index + 1].due_date for index in range(len(rows)-1)):
+        raise HttpError(422, "Instalment dates must be chronological.")
+    with transaction.atomic():
+        try:
+            invoice = Invoice.objects.select_for_update().select_related("client").get(pk=payload.invoice_id)
+        except Invoice.DoesNotExist:
+            raise HttpError(404, "Invoice not found.")
+        if invoice.status in {Invoice.Status.PAID, Invoice.Status.WRITTEN_OFF}:
+            raise HttpError(422, "Paid or written-off invoices cannot receive a new plan.")
+        if invoice.instalments.exists():
+            raise HttpError(409, "This invoice already has an instalment plan.")
+        paid = invoice.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        outstanding = max(Decimal("0"), invoice.amount-paid)
+        if sum((item.amount for item in rows), Decimal("0")) != outstanding:
+            raise HttpError(422, f"Instalment amounts must total the outstanding balance of {outstanding} {invoice.currency}.")
+        for item in rows:
+            Instalment.objects.create(invoice=invoice, client=invoice.client, seq=item.seq, label=item.label.strip()[:120],
+                amount=item.amount, due_date=item.due_date, grace_days=item.grace_days)
+        verdict = evaluate_plan_verdict([{"due_date": item.due_date, "amount": item.amount, "grace_days": item.grace_days, "status": "pending"} for item in rows])
+        PlanMeta.objects.create(invoice=invoice, plan_deadline=max(item.due_date for item in rows), last_verdict=verdict, notes=payload.notes)
+        Event.objects.create(client=invoice.client, engagement=invoice.engagement, invoice=invoice, kind="instalment_plan_created",
+            category=Event.Category.MONEY, polarity=0, title=f"Instalment plan created for {invoice.number}",
+            detail=f"{len(rows)} instalments scheduled; current verdict: {verdict}.", amount=outstanding, occurred_at=timezone.now())
+    return {"invoice_id": invoice.id, "invoice_number": invoice.number, "verdict": verdict, "instalment_count": len(rows)}
