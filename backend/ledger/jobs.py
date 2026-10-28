@@ -132,11 +132,16 @@ def refresh_fx_rates():
             return
         quotes = payload.get("quotes", {})
         now = timezone.now()
+        updated = False
         for key, value in quotes.items():
             if key.startswith("USD") and len(key) == 6 and Decimal(str(value)) > 0:
                 FxRate.objects.update_or_create(base="USD", quote=key[3:], defaults={
                     "rate": Decimal(str(value)), "fetched_at": now, "source": "exchangerate.host"
                 })
+                updated = True
+        if updated:
+            from ledger.api_extra import _recompute_client_scores
+            _recompute_client_scores()
     except Exception:
         logger.exception("FX refresh failed; existing stored rates were retained.")
 
