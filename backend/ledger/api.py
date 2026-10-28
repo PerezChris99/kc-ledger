@@ -376,8 +376,8 @@ def list_plans(request):
 
 @router.get("/dashboard")
 def dashboard(request):
-    import os
-    base = os.environ.get("LEDGER_BASE_CURRENCY", "USD").upper()
+    from ledger.api_extra import _get_app_settings
+    base = _get_app_settings()["base_currency"]
     today = timezone.localdate()
     def convert(value, currency):
         currency = currency.upper()
