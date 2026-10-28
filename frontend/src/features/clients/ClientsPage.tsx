@@ -7,8 +7,8 @@ type ClientRow = { id: number; name: string; company: string; email: string; sta
 type ClientList = { items: ClientRow[]; total: number };
 type Detail = { id: number; name: string; company: string; email: string; phone: string; country: string; currency: string; status: string; notes: string; score: {score: number; tier: string; factors: {key: string; label: string; maximum: number; points: number; detail: string; verdict: string}[]; penalties: {label: string; points: number}[]}; invoices: {id: number; number: string; title: string; amount: string; outstanding: string; currency: string; status: string; due_date: string}[]; events: {id: number; title: string; detail: string; occurred_at: string}[] };
 
-export default function ClientsPage() {
-  const [q, setQ] = useState("");
+export default function ClientsPage({ initialQuery = "" }: { initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery);
   const [selected, setSelected] = useState<number | null>(null);
   const list = useQuery({ queryKey: ["clients", q], queryFn: () => api<ClientList>(`/api/clients?q=${encodeURIComponent(q)}&limit=100`) });
   const detail = useQuery({ queryKey: ["client", selected], queryFn: () => api<Detail>(`/api/clients/${selected}`), enabled: selected !== null });
