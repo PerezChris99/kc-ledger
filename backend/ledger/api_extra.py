@@ -1,14 +1,20 @@
 from calendar import monthrange
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
-from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, Payment, PaymentAllocation, PlanMeta, Target, TimeEntry
+from ledger.models import Client, Event, Expense, FxRate, Instalment, Invoice, Meta, Payment, PaymentAllocation, PlanMeta, Target, TimeEntry
 
 router = Router()
+
+class SettingsIn(Schema):
+    base_currency: str | None = None
+    time_zone: str | None = None
+    notifications_enabled: bool | None = None
+    sounds: dict[str, bool] | None = None
 
 class TargetIn(Schema):
     name: str
@@ -211,3 +217,76 @@ def create_plan(request, payload: PlanIn):
             detail=f"{len(rows)} instalments scheduled; current verdict: {verdict}.", amount=outstanding, occurred_at=timezone.now())
         score = _refresh_score(invoice.client)
     return {"invoice_id": invoice.id, "invoice_number": invoice.number, "verdict": verdict, "instalment_count": len(rows), "score": score.score}
+
+
+DEFAULT_APP_SETTINGS = {
+    "base_currency": "USD",
+    "time_zone": "Africa/Kampala",
+    "notifications_enabled": False,
+    "sounds": {"success": True, "info": True, "warning": True, "alarm": True},
+}
+
+def _get_app_settings():
+    import json
+    from django.conf import settings as django_settings
+    defaults = dict(DEFAULT_APP_SETTINGS)
+    defaults["sounds"] = dict(DEFAULT_APP_SETTINGS["sounds"])
+    defaults["base_currency"] = __import__("os").environ.get("LEDGER_BASE_CURRENCY", "USD").upper()
+    defaults["time_zone"] = django_settings.TIME_ZONE
+    row = Meta.objects.filter(pk="app_settings").first()
+    if row:
+        try:
+            stored = json.loads(row.value)
+            defaults.update({key: value for key, value in stored.items() if key in DEFAULT_APP_SETTINGS})
+            if isinstance(stored.get("sounds"), dict):
+                defaults["sounds"].update({key: bool(value) for key, value in stored["sounds"].items() if key in defaults["sounds"]})
+        except (ValueError, TypeError):
+            pass
+    return defaults
+
+@router.get("/settings")
+def read_settings(request):
+    return _get_app_settings()
+
+@router.patch("/settings")
+def update_settings(request, payload: SettingsIn):
+    import json
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    values = _get_app_settings()
+    changes = payload.dict(exclude_unset=True)
+    if "base_currency" in changes and changes["base_currency"] is not None:
+        currency = changes["base_currency"].upper()
+        if len(currency) != 3 or not currency.isalpha():
+            raise HttpError(422, "Base currency must be a three-letter currency code.")
+        values["base_currency"] = currency
+    if "time_zone" in changes and changes["time_zone"] is not None:
+        try:
+            ZoneInfo(changes["time_zone"])
+        except (ZoneInfoNotFoundError, ValueError):
+            raise HttpError(422, "Unknown timezone.")
+        values["time_zone"] = changes["time_zone"]
+    if "notifications_enabled" in changes and changes["notifications_enabled"] is not None:
+        values["notifications_enabled"] = bool(changes["notifications_enabled"])
+    if "sounds" in changes and changes["sounds"] is not None:
+        if not isinstance(changes["sounds"], dict):
+            raise HttpError(422, "Sound preferences must be an object.")
+        for key, value in changes["sounds"].items():
+            if key not in values["sounds"]:
+                raise HttpError(422, f"Unknown sound category: {key}.")
+            values["sounds"][key] = bool(value)
+    Meta.objects.update_or_create(key="app_settings", defaults={"value": json.dumps(values, sort_keys=True)})
+    return values
+
+@router.get("/notifications")
+def list_notifications(request, since: datetime | None = None, limit: int = 30):
+    limit = min(max(limit, 1), 100)
+    if since is None:
+        since = timezone.now() - __import__("datetime").timedelta(minutes=5)
+    if timezone.is_naive(since):
+        since = timezone.make_aware(since, timezone.get_current_timezone())
+    kinds = ["invoice_overdue_reminder", "instalment_due_reminder", "ghosting_detected", "recurring_invoice_drafted",
+        "plan_verdict_perfect", "plan_verdict_late", "plan_verdict_at_risk", "plan_verdict_broken"]
+    rows = Event.objects.filter(kind__in=kinds, occurred_at__gt=since).order_by("occurred_at", "id")[:limit]
+    return {"items": [{"id": e.id, "kind": e.kind, "title": e.title, "detail": e.detail,
+        "category": e.category, "polarity": e.polarity, "occurred_at": e.occurred_at.isoformat()} for e in rows],
+        "server_time": timezone.now().isoformat()}
