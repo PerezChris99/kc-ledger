@@ -155,7 +155,8 @@ def avoid_clients(request):
     from ledger.services.scoring import compute_client_score
     result = []
     for client in Client.objects.filter(status="blacklisted") | Client.objects.filter(score__lt=40):
-        score = compute_client_score(_client_snapshot(client)).as_dict()
+        snapshot = _client_snapshot(client)
+        score = compute_client_score(snapshot).as_dict()
         events = list(client.events.filter(deleted_at__isnull=True).order_by("-occurred_at")[:30])
         flags = [{"kind": e.kind, "title": e.title, "detail": e.detail, "occurred_at": e.occurred_at.isoformat()} for e in events if e.polarity < 0]
         for invoice in client.invoices.all():
@@ -165,7 +166,7 @@ def avoid_clients(request):
                 flags.append({"kind": "write_off", "title": f"Written off {invoice.number}", "detail": f"Invoice amount {invoice.amount} {invoice.currency}.", "occurred_at": invoice.updated_at.isoformat()})
         result.append({"id": client.id, "name": client.name, "company": client.company, "email": client.email,
             "status": client.status, "score": score["score"], "tier": score["tier"], "flags": flags[:20],
-            "invoices": len(client.invoices.all()), "lifetime_collected": str(sum((p.amount for p in client.payments.all()), Decimal("0")))})
+            "invoices": len(client.invoices.all()), "lifetime_collected": str(snapshot["lifetime_collected"]), "currency": snapshot["base_currency"]})
     unique = {item["id"]: item for item in result}
     return {"items": sorted(unique.values(), key=lambda item: item["score"])}
 
