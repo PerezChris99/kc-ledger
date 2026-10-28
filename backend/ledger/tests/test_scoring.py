@@ -20,3 +20,19 @@ def test_overdue_invoice_reduces_outstanding_factor():
     base = compute_client_score({"invoices": []}, TODAY)
     risky = compute_client_score({"invoices": [{"amount": 100, "outstanding": 100, "status": "sent", "due_date": TODAY - timedelta(days=10)}]}, TODAY)
     assert next(f for f in risky.factors if f.key == "outstanding_risk").points < next(f for f in base.factors if f.key == "outstanding_risk").points
+
+
+def test_revenue_value_is_relative_to_best_client():
+    lower = compute_client_score({"lifetime_collected": 100, "best_client_collected": 1000}, TODAY)
+    leader = compute_client_score({"lifetime_collected": 1000, "best_client_collected": 1000}, TODAY)
+    lower_factor = next(f for f in lower.factors if f.key == "revenue_value")
+    leader_factor = next(f for f in leader.factors if f.key == "revenue_value")
+    assert lower_factor.points < leader_factor.points
+    assert leader_factor.points == 12
+
+def test_writeoff_penalty_uses_uncollected_amount():
+    result = compute_client_score({"invoices": [
+        {"amount": 100, "outstanding": 20, "status": "written_off"}
+    ]}, TODAY)
+    penalty = next(p for p in result.penalties if p["key"] == "writeoff_ratio")
+    assert penalty["points"] == 8
