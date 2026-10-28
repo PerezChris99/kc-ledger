@@ -151,7 +151,7 @@ def calendar_items(request, month: str = ""):
 
 @router.get("/avoid")
 def avoid_clients(request):
-    from ledger.api import _client_snapshot, _refresh_score
+    from ledger.api import _client_snapshot
     from ledger.services.scoring import compute_client_score
     result = []
     for client in Client.objects.filter(status="blacklisted") | Client.objects.filter(score__lt=40):
@@ -186,7 +186,7 @@ class PlanIn(Schema):
 def create_plan(request, payload: PlanIn):
     if not payload.instalments:
         raise HttpError(422, "A plan must contain at least one instalment.")
-    rows = sorted(payload.instalments, key=lambda item: (item.due_date, item.seq))
+    rows = sorted(payload.instalments, key=lambda item: item.seq)
     sequences = [item.seq for item in rows]
     if any(seq < 1 for seq in sequences) or len(set(sequences)) != len(sequences):
         raise HttpError(422, "Instalment sequence numbers must be unique positive integers.")
