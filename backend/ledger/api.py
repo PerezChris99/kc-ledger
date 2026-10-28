@@ -157,9 +157,23 @@ def _client_snapshot(client):
         collected_by_client[payment.client_id] = collected_by_client.get(payment.client_id, Decimal("0")) + value
     lifetime_collected = collected_by_client.get(client.id, Decimal("0"))
     best_client_collected = max(collected_by_client.values(), default=Decimal("0"))
+    expenses_total = Decimal("0")
+    for expense in Expense.objects.filter(client=client):
+        value = convert(expense.amount, expense.currency)
+        if value is None:
+            currency_gaps.add(expense.currency)
+        else:
+            expenses_total += value
+    total_hours = TimeEntry.objects.filter(client=client).aggregate(total=Sum("hours"))["total"] or Decimal("0")
+    outstanding_total = sum((row["outstanding"] for row in invoices), Decimal("0"))
+    overdue_total = sum((row["outstanding"] for row in invoices if row["due_date"] < timezone.localdate()), Decimal("0"))
+    net_contribution = lifetime_collected-expenses_total
+    effective_hourly_rate = net_contribution/total_hours if total_hours > 0 else None
 
     return {"status": client.status, "invoices": invoices, "lifetime_collected": lifetime_collected,
-        "best_client_collected": best_client_collected, "base_currency": base,
+        "best_client_collected": best_client_collected, "base_currency": base, "expenses_total": expenses_total,
+        "net_contribution": net_contribution, "total_hours": total_hours, "effective_hourly_rate": effective_hourly_rate,
+        "outstanding_total": outstanding_total, "overdue_total": overdue_total,
         "unconverted_currencies": sorted(currency_gaps),
         "engagement_count": client.engagements.count(), "started_at": client.started_at,
         "events": [{"kind": e.kind, "polarity": e.polarity, "weight": e.weight} for e in events],
@@ -249,7 +263,8 @@ def client_detail(request, client_id: int):
         client = Client.objects.get(pk=client_id)
     except Client.DoesNotExist:
         raise HttpError(404, "Client not found.")
-    score = compute_client_score(_client_snapshot(client)).as_dict()
+    snapshot = _client_snapshot(client)
+    score = compute_client_score(snapshot).as_dict()
     invoices = []
     for inv in client.invoices.select_related("engagement").annotate(paid_total=Sum("payments__amount")):
         paid = inv.paid_total or Decimal("0")
@@ -264,7 +279,13 @@ def client_detail(request, client_id: int):
         "detail": e.detail, "occurred_at": e.occurred_at.isoformat()} for e in client.events.filter(deleted_at__isnull=True)[:200]]
     return {"id": client.id, "name": client.name, "company": client.company, "email": client.email, "phone": client.phone,
         "country": client.country, "currency": client.currency, "status": client.status, "notes": client.notes,
-        "score": score, "invoices": invoices, "payments": payments, "events": events,
+        "score": score, "score_currency": snapshot["base_currency"], "financials": {
+            "currency": snapshot["base_currency"], "collected": str(snapshot["lifetime_collected"]),
+            "outstanding": str(snapshot["outstanding_total"]), "overdue": str(snapshot["overdue_total"]),
+            "expenses": str(snapshot["expenses_total"]), "net_contribution": str(snapshot["net_contribution"]),
+            "hours": str(snapshot["total_hours"]), "effective_hourly_rate": str(snapshot["effective_hourly_rate"]) if snapshot["effective_hourly_rate"] is not None else None,
+            "unconverted_currencies": snapshot["unconverted_currencies"]},
+        "invoices": invoices, "payments": payments, "events": events,
         "engagements": [{"id": e.id, "name": e.name, "kind": e.kind, "status": e.status,
             "amount": str(e.agreed_amount), "currency": e.currency} for e in client.engagements.all()]}
 
