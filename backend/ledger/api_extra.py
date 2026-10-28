@@ -112,7 +112,7 @@ def _target_progress(target):
                     continue
             current += value
     elif target.type == Target.Type.CLIENTS:
-        current = Decimal(Client.objects.count())
+        current = Decimal(Client.objects.filter(status=Client.Status.ACTIVE).count())
     else:
         current = TimeEntry.objects.aggregate(total=Sum("hours"))["total"] or Decimal("0")
     progress = min(100.0, float(current/target.amount*100)) if target.amount else 0.0
