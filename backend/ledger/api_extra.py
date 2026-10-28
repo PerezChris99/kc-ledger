@@ -137,7 +137,11 @@ def create_target(request, payload: TargetIn):
         raise HttpError(422, "Target amount must be positive.")
     if payload.type not in {"revenue", "clients", "hours"}:
         raise HttpError(422, "Unsupported target type.")
-    target = Target.objects.create(**payload.dict())
+    values = payload.dict()
+    values["currency"] = values["currency"].upper()
+    if len(values["currency"]) != 3 or not values["currency"].isalpha():
+        raise HttpError(422, "Currency must be a three-letter code.")
+    target = Target.objects.create(**values)
     Event.objects.create(kind="target_created", category=Event.Category.RELATIONSHIP, polarity=0,
         title=f"Target created: {target.name}", detail=f"Deadline {target.deadline.isoformat()}.", occurred_at=timezone.now())
     return {"id": target.id, "name": target.name}
