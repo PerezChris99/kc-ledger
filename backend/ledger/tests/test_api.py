@@ -82,3 +82,38 @@ def test_csrf_endpoint_returns_token(client):
     response = client.get("/api/csrf")
     assert response.status_code == 200
     assert response.json()["csrfToken"]
+
+
+@pytest.mark.django_db
+def test_plan_creation_requires_exact_outstanding_balance(staff_client):
+    owner = Client.objects.create(name="Plan Client")
+    invoice = Invoice.objects.create(client=owner, number="PLAN-001", title="Project",
+        issue_date=date.today(), due_date=date.today()+timedelta(days=30),
+        amount=Decimal("100.00"), status=Invoice.Status.SENT)
+    response = staff_client.post("/api/plans", data={
+        "invoice_id": invoice.id,
+        "instalments": [
+            {"seq": 1, "label": "First", "amount": "60.00", "due_date": (date.today()+timedelta(days=7)).isoformat(), "grace_days": 3},
+            {"seq": 2, "label": "Final", "amount": "39.00", "due_date": (date.today()+timedelta(days=30)).isoformat(), "grace_days": 3}
+        ]
+    }, content_type="application/json")
+    assert response.status_code == 422
+    assert Instalment.objects.filter(invoice=invoice).count() == 0
+
+@pytest.mark.django_db
+def test_plan_creation_records_schedule_and_metadata(staff_client):
+    owner = Client.objects.create(name="Plan Client Two")
+    invoice = Invoice.objects.create(client=owner, number="PLAN-002", title="Project",
+        issue_date=date.today(), due_date=date.today()+timedelta(days=30),
+        amount=Decimal("100.00"), status=Invoice.Status.SENT)
+    response = staff_client.post("/api/plans", data={
+        "invoice_id": invoice.id,
+        "instalments": [
+            {"seq": 1, "label": "First", "amount": "60.00", "due_date": (date.today()+timedelta(days=7)).isoformat(), "grace_days": 3},
+            {"seq": 2, "label": "Final", "amount": "40.00", "due_date": (date.today()+timedelta(days=30)).isoformat(), "grace_days": 3}
+        ]
+    }, content_type="application/json")
+    assert response.status_code == 200
+    assert Instalment.objects.filter(invoice=invoice).count() == 2
+    assert PlanMeta.objects.filter(invoice=invoice).exists()
+    assert Event.objects.filter(invoice=invoice, kind="instalment_plan_created").exists()
