@@ -3,7 +3,6 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from ledger.models import Client, Engagement, Event, Instalment, Invoice, Payment, PaymentAllocation, SignalType
-from ledger.services.scoring import compute_client_score
 
 DEMO = [
     ("Nadia Raman", "Nadia Studio", "nadia@example.test", "active", 4200),
@@ -61,8 +60,6 @@ class Command(BaseCommand):
                     Event.objects.create(client=client, invoice=invoice, payment=payment, kind="payment_recorded", category="money", polarity=1, title="Demo payment recorded", detail="Fictional seeded payment.", amount=payment.amount, occurred_at=timezone.now())
             if index in (3, 4):
                 Event.objects.get_or_create(client=client, kind="scope_creep", title="Demo risk signal", defaults={"category": "delivery", "polarity": -1, "weight": Decimal("2"), "detail": "Fictional seed signal.", "occurred_at": timezone.now()})
-            snapshot = {"status": client.status, "invoices": [{"amount": invoice.amount, "status": invoice.status, "due_date": invoice.due_date}], "lifetime_collected": invoice.amount if invoice.status == "paid" else 0, "engagement_count": 1, "started_at": client.started_at}
-            client.score = compute_client_score(snapshot).score
-            client.score_updated_at = timezone.now()
-            client.save(update_fields=["score", "score_updated_at", "updated_at"])
+            from ledger.api import _refresh_score
+            _refresh_score(client)
         self.stdout.write(self.style.SUCCESS("Demo dataset ready; all demo addresses use example.test."))
