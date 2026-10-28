@@ -131,12 +131,14 @@ def _client_snapshot(client):
         collected_native = invoice.paid_total or Decimal("0")
         amount_base = convert(invoice.amount, invoice.currency)
         collected_base = convert(collected_native, invoice.currency)
-        outstanding_base = convert(max(Decimal("0"), invoice.amount-collected_native), invoice.currency)
-        if amount_base is None or collected_base is None or outstanding_base is None:
+        uncollected_native = max(Decimal("0"), invoice.amount-collected_native)
+        writeoff_base = convert(uncollected_native, invoice.currency) if invoice.status == Invoice.Status.WRITTEN_OFF else Decimal("0")
+        outstanding_base = Decimal("0") if invoice.status == Invoice.Status.WRITTEN_OFF else convert(uncollected_native, invoice.currency)
+        if amount_base is None or collected_base is None or outstanding_base is None or writeoff_base is None:
             currency_gaps.add(invoice.currency)
-            amount_base = collected_base = outstanding_base = Decimal("0")
+            amount_base = collected_base = outstanding_base = writeoff_base = Decimal("0")
         invoices.append({"id": invoice.id, "number": invoice.number, "amount": amount_base,
-            "outstanding": outstanding_base, "collected": collected_base, "due_date": invoice.due_date,
+            "outstanding": outstanding_base, "writeoff_amount": writeoff_base, "collected": collected_base, "due_date": invoice.due_date,
             "paid_on": invoice.paid_at.date() if invoice.paid_at else None, "status": invoice.status})
 
     events = list(client.events.filter(deleted_at__isnull=True))
@@ -270,7 +272,7 @@ def client_detail(request, client_id: int):
         paid = inv.paid_total or Decimal("0")
         invoices.append({"id": inv.id, "number": inv.number, "title": inv.title, "issue_date": inv.issue_date.isoformat(),
             "due_date": inv.due_date.isoformat(), "amount": str(inv.amount), "collected": str(paid),
-            "outstanding": str(max(Decimal("0"), inv.amount-paid)), "currency": inv.currency, "status": inv.status,
+            "outstanding": str(Decimal("0") if inv.status == Invoice.Status.WRITTEN_OFF else max(Decimal("0"), inv.amount-paid)), "currency": inv.currency, "status": inv.status,
             "engagement": inv.engagement.name if inv.engagement else None})
     payments = [{"id": p.id, "invoice_number": p.invoice.number, "amount": str(p.amount),
         "currency": p.invoice.currency, "paid_on": p.paid_on.isoformat(), "method": p.method, "reference": p.reference}
@@ -342,7 +344,7 @@ def list_invoices(request, status: str = "", q: str = "", limit: int = 50, offse
         paid = inv.paid_total or Decimal("0")
         items.append({"id": inv.id, "number": inv.number, "title": inv.title, "client_id": inv.client_id,
             "client_name": inv.client.name, "amount": str(inv.amount), "collected": str(paid),
-            "outstanding": str(max(Decimal("0"), inv.amount-paid)), "currency": inv.currency,
+            "outstanding": str(Decimal("0") if inv.status == Invoice.Status.WRITTEN_OFF else max(Decimal("0"), inv.amount-paid)), "currency": inv.currency,
             "issue_date": inv.issue_date.isoformat(), "due_date": inv.due_date.isoformat(), "status": inv.status, "notes": inv.notes})
     return {"items": items, "total": total, "limit": limit, "offset": max(0, offset)}
 
@@ -656,7 +658,8 @@ def dashboard(request):
     invoices = list(Invoice.objects.select_related("client").annotate(paid_total=Sum("payments__amount")))
     for inv in invoices:
         paid = inv.paid_total or Decimal("0")
-        paid_base, balance_base = convert(paid, inv.currency), convert(max(Decimal("0"), inv.amount-paid), inv.currency)
+        paid_base = convert(paid, inv.currency)
+        balance_base = Decimal("0") if inv.status == Invoice.Status.WRITTEN_OFF else convert(max(Decimal("0"), inv.amount-paid), inv.currency)
         if paid_base is None or balance_base is None:
             unknown.add(inv.currency)
             continue
@@ -704,7 +707,7 @@ def dashboard(request):
     client_revenue = {}
     for inv in invoices:
         paid = inv.paid_total or Decimal("0")
-        balance = max(Decimal("0"), inv.amount-paid)
+        balance = Decimal("0") if inv.status == Invoice.Status.WRITTEN_OFF else max(Decimal("0"), inv.amount-paid)
         value = convert(balance, inv.currency)
         if value is not None:
             age = (today-inv.due_date).days
