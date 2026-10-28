@@ -357,3 +357,31 @@ td strong { color: var(--text); font-weight: 500; }
   .page-footer { flex-direction: column; gap: 6px; font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+.dashboard-grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 16px; }
+.dashboard-grid > .panel { min-width: 0; }
+.dashboard-grid .span-4 { grid-column: span 4; }
+.dashboard-grid .span-6 { grid-column: span 6; }
+.dashboard-grid .span-8 { grid-column: span 8; }
+.dashboard-grid .span-12 { grid-column: span 12; }
+.doughnut-wrap { position: relative; height: 245px; margin-top: 10px; }
+.doughnut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.doughnut-center strong { font: 600 28px var(--font-mono); }
+.doughnut-center small { margin-top: 3px; color: var(--text-muted); font: 11px var(--font-mono); }
+.leader-row { display: flex; align-items: center; gap: 10px; min-height: 46px; border-bottom: 1px solid var(--border); }
+.leader-row:last-child { border-bottom: 0; }
+.leader-name { min-width: 0; flex: 1; }
+.leader-name strong, .leader-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leader-name strong { color: var(--text); font-size: 12px; font-weight: 500; }
+.leader-name small { margin-top: 3px; color: var(--text-muted); font-size: 11px; }
+.chart-empty.compact { min-height: 120px; }
+.form-stack textarea { width: 100%; min-height: 78px; resize: vertical; padding: 10px 11px; border: 1px solid var(--border-strong); border-radius: 3px; background: var(--input); color: var(--text); font: 13px var(--font-ui); letter-spacing: normal; }
+@media (max-width: 1100px) {
+  .dashboard-grid .span-8 { grid-column: span 8; }
+  .dashboard-grid .span-4 { grid-column: span 4; }
+}
+@media (max-width: 700px) {
+  .dashboard-grid { grid-template-columns: 1fr; gap: 10px; }
+  .dashboard-grid .span-4, .dashboard-grid .span-6, .dashboard-grid .span-8, .dashboard-grid .span-12 { grid-column: auto; }
+  .doughnut-wrap { height: 230px; }
+}
