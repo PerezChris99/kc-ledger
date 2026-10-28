@@ -48,9 +48,9 @@ function TargetTracker() {
   const dashboard=useQuery({queryKey:["dashboard"],queryFn:()=>api<{currency:string;collected:string;client_count:number;total_hours:string}>("/api/dashboard")});
   const target=targets.data?.items[0];
   if(!target) return <div className="target-empty"><span className="target-icon"><CircleDollarSign size={17}/></span><div><strong>No target set</strong><small>Set one in Settings</small></div></div>;
-  const current=target.type==="revenue"?Number(dashboard.data?.collected??0):target.type==="clients"?Number(dashboard.data?.client_count??0):0;
+  const current=target.type==="revenue"?Number(dashboard.data?.collected??0):target.type==="clients"?Number(dashboard.data?.client_count??0):Number(dashboard.data?.total_hours??0);
   const progress=Math.max(0,Math.min(100,current/Math.max(1,Number(target.amount))*100));
-  return <button className="target-widget" onClick={()=>window.dispatchEvent(new CustomEvent("kc-ledger:navigate",{detail:"settings"}))}><div className="target-widget-top"><span>{target.name}</span><strong>{progress.toFixed(0)}%</strong></div><div className="target-track"><span style={{width:`${progress}%`}}/></div><small>{target.type==="revenue"?money(current,target.currency):current} / {money(target.amount,target.currency)} · {target.deadline}</small></button>;
+  return <button className="target-widget" onClick={()=>window.dispatchEvent(new CustomEvent("kc-ledger:navigate",{detail:"settings"}))}><div className="target-widget-top"><span>{target.name}</span><strong>{progress.toFixed(0)}%</strong></div><div className="target-track"><span style={{width:`${progress}%`}}/></div><small>{target.type==="revenue"?money(current,target.currency):current} / {target.type==="revenue"?money(target.amount,target.currency):target.amount} · {target.deadline}</small></button>;
 }
 
 export default function App() {
