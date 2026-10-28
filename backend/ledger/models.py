@@ -50,7 +50,7 @@ class Client(SoftDeleteModel):
 
     class Meta:
         ordering = ["name"]
-        indexes = [models.Index(fields=["status", "name"]), models.Index(fields=["score", "status"])]
+        indexes = [models.Index(fields=["status", "name"], name="client_status_name_idx"), models.Index(fields=["score", "status"], name="client_score_status_idx")]
         constraints = [models.CheckConstraint(condition=Q(score__gte=0, score__lte=100), name="client_score_0_100")]
 
     def __str__(self):
@@ -86,7 +86,7 @@ class Engagement(SoftDeleteModel):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["client", "status"])]
+        indexes = [models.Index(fields=["client", "status"], name="engagement_client_status_idx")]
 
     def __str__(self):
         return f"{self.client.name} — {self.name}"
@@ -115,7 +115,7 @@ class Invoice(SoftDeleteModel):
 
     class Meta:
         ordering = ["-issue_date", "-id"]
-        indexes = [models.Index(fields=["client", "status"]), models.Index(fields=["status", "due_date"])]
+        indexes = [models.Index(fields=["client", "status"], name="invoice_client_status_idx"), models.Index(fields=["status", "due_date"], name="invoice_status_due_idx")]
         constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name="invoice_amount_positive")]
 
     def __str__(self):
@@ -154,7 +154,7 @@ class Instalment(SoftDeleteModel):
             models.UniqueConstraint(fields=["invoice", "seq"], condition=Q(deleted_at__isnull=True), name="unique_live_instalment_seq"),
             models.CheckConstraint(condition=Q(amount__gt=0), name="instalment_amount_positive"),
         ]
-        indexes = [models.Index(fields=["status", "due_date"])]
+        indexes = [models.Index(fields=["status", "due_date"], name="instalment_status_due_idx")]
 
     def __str__(self):
         return f"{self.invoice.number} / {self.seq} — {self.label}"
@@ -172,7 +172,7 @@ class Payment(SoftDeleteModel):
     class Meta:
         ordering = ["-paid_on", "-id"]
         constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name="payment_amount_positive")]
-        indexes = [models.Index(fields=["client", "paid_on"])]
+        indexes = [models.Index(fields=["client", "paid_on"], name="payment_client_paid_idx")]
 
     def __str__(self):
         return f"{self.invoice.number} payment {self.pk}"
@@ -231,7 +231,7 @@ class Event(models.Model):
 
     class Meta:
         ordering = ["-occurred_at", "-id"]
-        indexes = [models.Index(fields=["client", "occurred_at"]), models.Index(fields=["category", "occurred_at"])]
+        indexes = [models.Index(fields=["client", "occurred_at"], name="event_client_occurred_idx"), models.Index(fields=["category", "occurred_at"], name="event_category_occurred_idx")]
         constraints = [models.CheckConstraint(condition=Q(polarity__gte=-1, polarity__lte=1), name="event_polarity_range")]
 
     def save(self, *args, **kwargs):
@@ -295,7 +295,7 @@ class FxRate(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["base", "quote"], name="unique_fx_pair")]
-        indexes = [models.Index(fields=["base", "quote", "fetched_at"])]
+        indexes = [models.Index(fields=["base", "quote", "fetched_at"], name="fx_pair_fetched_idx")]
 
 
 class Meta(models.Model):
