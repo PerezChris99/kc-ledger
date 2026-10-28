@@ -145,7 +145,7 @@ def calendar_items(request, month: str = ""):
 
 @router.get("/avoid")
 def avoid_clients(request):
-    from ledger.api import _client_snapshot
+    from ledger.api import _client_snapshot, _refresh_score
     from ledger.services.scoring import compute_client_score
     result = []
     for client in Client.objects.filter(status="blacklisted") | Client.objects.filter(score__lt=40):
@@ -209,4 +209,5 @@ def create_plan(request, payload: PlanIn):
         Event.objects.create(client=invoice.client, engagement=invoice.engagement, invoice=invoice, kind="instalment_plan_created",
             category=Event.Category.MONEY, polarity=0, title=f"Instalment plan created for {invoice.number}",
             detail=f"{len(rows)} instalments scheduled; current verdict: {verdict}.", amount=outstanding, occurred_at=timezone.now())
-    return {"invoice_id": invoice.id, "invoice_number": invoice.number, "verdict": verdict, "instalment_count": len(rows)}
+        score = _refresh_score(invoice.client)
+    return {"invoice_id": invoice.id, "invoice_number": invoice.number, "verdict": verdict, "instalment_count": len(rows), "score": score.score}
