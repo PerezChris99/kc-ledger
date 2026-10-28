@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 18mm 15mm; @bottom-right { content: "KC LEDGER · PRIVATE · " counter(page); color: #6B7A8A; font: 9pt monospace; } }
+body { color:#1F2937; font:10pt Inter,Arial,sans-serif; line-height:1.45; }
+h1,h2,h3 { color:#0B1B2A; margin:0 0 7pt; } h1 { font-size:22pt; } h2 { font-size:13pt; margin-top:18pt; border-bottom:1px solid #CBD5E1; padding-bottom:5pt; }
+.muted { color:#64748B; font-size:8.5pt; } .header { border-bottom:3px solid #58A6FF; padding-bottom:12pt; margin-bottom:14pt; }
+.kpis { display:table; width:100%; border-spacing:5pt; margin:0 -5pt; } .kpi { display:table-cell; background:#F1F5F9; padding:9pt; width:33%; } .kpi strong { display:block; font:16pt monospace; color:#0B1B2A; }
+table { width:100%; border-collapse:collapse; margin-top:7pt; } th,td { border-bottom:1px solid #E2E8F0; padding:6pt 5pt; text-align:left; vertical-align:top; } th { color:#64748B; font-size:8pt; text-transform:uppercase; } .number { text-align:right; font-family:monospace; white-space:nowrap; }
+.flag { border-left:3px solid #F85149; padding:5pt 8pt; margin:6pt 0; background:#FFF7F7; } .score { display:inline-block; padding:4pt 7pt; background:#EAF2FF; font:bold 13pt monospace; }
+</style></head><body>
+<div class="header"><p class="muted">KC LEDGER / CLIENT INTELLIGENCE DOSSIER / GENERATED {{ generated_at }}</p><h1>{{ client.name }}</h1><p>{{ client.company }} · {{ client.email }} · {{ client.country }}</p><p>Current status: <strong>{{ client.status|upper }}</strong> · Health score: <span class="score">{{ score.score }} / 100 · {{ score.tier }}</span></p></div>
+<div class="kpis"><div class="kpi"><span class="muted">Lifetime collected ({{ currency }})</span><strong>{{ collected }}</strong></div><div class="kpi"><span class="muted">Open invoices</span><strong>{{ open_invoice_count }}</strong></div><div class="kpi"><span class="muted">Recorded events</span><strong>{{ events|length }}</strong></div></div>
+<h2>Score breakdown</h2><table><thead><tr><th>Factor</th><th class="number">Points</th><th>Explanation</th></tr></thead><tbody>{% for factor in score.factors %}<tr><td>{{ factor.label }}</td><td class="number">{{ factor.points }} / {{ factor.maximum }}</td><td>{{ factor.detail }}</td></tr>{% endfor %}</tbody></table>
+{% if score.penalties %}<h2>Penalties</h2>{% for penalty in score.penalties %}<div class="flag"><strong>{{ penalty.label }}</strong> · −{{ penalty.points }} points</div>{% endfor %}{% endif %}
+<h2>Invoice register</h2><table><thead><tr><th>Invoice</th><th>Title</th><th>Due</th><th>Status</th><th class="number">Amount</th><th class="number">Outstanding</th></tr></thead><tbody>{% for invoice in invoices %}<tr><td>{{ invoice.number }}</td><td>{{ invoice.title }}</td><td>{{ invoice.due_date }}</td><td>{{ invoice.status }}</td><td class="number">{{ invoice.currency }} {{ invoice.amount }}</td><td class="number">{{ invoice.currency }} {{ invoice.outstanding }}</td></tr>{% empty %}<tr><td colspan="6">No invoices recorded.</td></tr>{% endfor %}</tbody></table>
+<h2>Recorded risk and relationship events</h2>{% for event in events %}<div class="{% if event.polarity < 0 %}flag{% endif %}"><strong>{{ event.title }}</strong><p>{{ event.detail }}</p><p class="muted">{{ event.occurred_at }} · {{ event.category }}</p></div>{% empty %}<p>No events recorded.</p>{% endfor %}
+<p class="muted">This dossier reflects recorded ledger data at generation time. Risk signals are evidence for review, not a substitute for professional judgement.</p>
+</body></html>
