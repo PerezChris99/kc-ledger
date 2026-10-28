@@ -402,3 +402,10 @@ td strong { color: var(--text); font-weight: 500; }
 .notification-toast button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; background: transparent; color: var(--text-muted); }
 .notification-toast button:hover { color: var(--text); background: var(--hover-row); }
 @media (max-width: 700px) { .notification-stack { top: 60px; right: 8px; width: calc(100vw - 16px); } }
+
+.install-button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 9px; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
+.install-button:hover { border-color: var(--primary); color: var(--primary); }
+.kpi-grid { grid-template-columns: repeat(6,minmax(0,1fr)); }
+.kpi-value { font-size: clamp(17px,1.55vw,24px); }
+@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@media (max-width: 700px) { .install-button { min-height: 32px; padding: 0 7px; font-size: 11px; } .kpi-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
