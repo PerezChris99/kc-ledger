@@ -61,6 +61,8 @@ def compute_client_score(snapshot: Mapping[str, Any], as_of: date | None = None)
                    if i.get("status") not in {"paid", "written_off", "disputed"}
                    and (_date(i.get("due_date")) or today) < today)
     total_collected = _money(snapshot.get("lifetime_collected", sum(_money(i.get("collected")) for i in invoices)))
+    currency_gaps = sorted(set(snapshot.get("unconverted_currencies", [])))
+    fx_note = f" FX unavailable for {', '.join(currency_gaps)}; those values are excluded." if currency_gaps else ""
     best_collected = max(total_collected, _money(snapshot.get("best_client_collected", total_collected)), 1.0)
 
     late_weight = 0.0
@@ -102,8 +104,8 @@ def compute_client_score(snapshot: Mapping[str, Any], as_of: date | None = None)
     factors = [
         Factor("payment_speed", "Payment speed", 16, round(payment_speed, 2), f"Amount-weighted average lateness: {average_late:.1f} days.", "good" if payment_speed >= 12 else "watch"),
         Factor("on_time_rate", "On-time rate", 16, round(on_time, 2), f"{on_time_rate:.0%} of settled invoice value was paid on time.", "good" if on_time >= 12 else "watch"),
-        Factor("outstanding_risk", "Outstanding risk", 10, round(outstanding_risk, 2), f"{overdue:.2f} overdue against {billed:.2f} billed.", "good" if outstanding_risk >= 7 else "risk"),
-        Factor("revenue_value", "Revenue value", 12, round(_clamp(revenue_value, 0, 12), 2), f"Lifetime collected: {total_collected:.2f}.", "good" if revenue_value >= 6 else "neutral"),
+        Factor("outstanding_risk", "Outstanding risk", 10, round(outstanding_risk, 2), f"{overdue:.2f} overdue against {billed:.2f} billed.{fx_note}", "good" if outstanding_risk >= 7 else "risk"),
+        Factor("revenue_value", "Revenue value", 12, round(_clamp(revenue_value, 0, 12), 2), f"Lifetime collected in base currency: {total_collected:.2f}.{fx_note}", "good" if revenue_value >= 6 else "neutral"),
         Factor("loyalty_repeat", "Loyalty and repeat", 8, round(loyalty, 2), f"{tenure_years:.1f} years of tenure and {engagement_count} engagements.", "good" if loyalty >= 4 else "neutral"),
         Factor("relationship_signals", "Relationship signals", 12, round(relationship, 2), f"{positive:.1f} positive weight and {negative:.1f} negative weight.", "good" if relationship >= 8 else "watch"),
         Factor("rate_health", "Rate health", 10, round(rate_health, 2), f"{increases} accepted rate increases and {haggling} haggling events.", "good" if rate_health >= 6 else "watch"),
@@ -111,7 +113,7 @@ def compute_client_score(snapshot: Mapping[str, Any], as_of: date | None = None)
     ]
     penalties = []
     disputed = sum(1 for i in invoices if i.get("status") == "disputed")
-    writeoff = sum(_money(i.get("amount")) for i in invoices if i.get("status") == "written_off")
+    writeoff = sum(_money(i.get("outstanding", i.get("amount"))) for i in invoices if i.get("status") == "written_off")
     total_invoiced = sum(_money(i.get("amount")) for i in invoices)
     chargebacks = max(0, int(snapshot.get("chargebacks", 0)))
     abusive = sum(1 for e in events if e.get("kind") == "abusive")
