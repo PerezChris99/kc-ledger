@@ -37,6 +37,7 @@ class FxRateIn(Schema):
 @router.get("/events")
 def list_events(request, category: str = "", q: str = "", limit: int = 100, offset: int = 0):
     limit = min(max(limit, 1), 200)
+    offset = max(0, min(offset, 1_000_000))
     qs = Event.objects.filter(deleted_at__isnull=True).select_related("client").order_by("-occurred_at", "-id")
     if category:
         qs = qs.filter(category=category)

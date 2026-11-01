@@ -150,20 +150,23 @@ def _client_snapshot(client):
                 "status": r.status, "grace_days": r.grace_days, "amount": r.amount} for r in rows]))
 
     collected_by_client = {}
-    for payment in Payment.objects.select_related("client", "invoice").all():
-        value = convert(payment.amount, payment.invoice.currency)
+    payment_totals = Payment.objects.values("client_id", "invoice__currency").annotate(total=Sum("amount"))
+    for row in payment_totals.iterator(chunk_size=256):
+        currency = row["invoice__currency"]
+        value = convert(row["total"], currency)
         if value is None:
-            if payment.client_id == client.id:
-                currency_gaps.add(payment.invoice.currency)
+            if row["client_id"] == client.id:
+                currency_gaps.add(currency)
             continue
-        collected_by_client[payment.client_id] = collected_by_client.get(payment.client_id, Decimal("0")) + value
+        collected_by_client[row["client_id"]] = collected_by_client.get(row["client_id"], Decimal("0")) + value
     lifetime_collected = collected_by_client.get(client.id, Decimal("0"))
     best_client_collected = max(collected_by_client.values(), default=Decimal("0"))
     expenses_total = Decimal("0")
-    for expense in Expense.objects.filter(client=client):
-        value = convert(expense.amount, expense.currency)
+    expense_totals = Expense.objects.filter(client=client).values("currency").annotate(total=Sum("amount"))
+    for row in expense_totals:
+        value = convert(row["total"], row["currency"])
         if value is None:
-            currency_gaps.add(expense.currency)
+            currency_gaps.add(row["currency"])
         else:
             expenses_total += value
     total_hours = TimeEntry.objects.filter(client=client).aggregate(total=Sum("hours"))["total"] or Decimal("0")
@@ -234,6 +237,7 @@ def session_status(request):
 @router.get("/clients")
 def list_clients(request, q: str = "", status: str = "", limit: int = 50, offset: int = 0):
     limit = min(max(limit, 1), 100)
+    offset = max(0, min(offset, 1_000_000))
     qs = Client.objects.all().order_by("name")
     if q.strip():
         from django.db.models import Q
@@ -460,8 +464,9 @@ def record_payment(request, payload: PaymentIn):
                 "amount": r.amount, "allocated": paid_map.get(r.id, Decimal("0")), "status": r.status} for r in rows], payload.amount)
             for item in allocation["allocations"]:
                 PaymentAllocation.objects.create(payment=payment, instalment_id=item["instalment_id"], amount=item["amount"])
+                paid_map[item["instalment_id"]] = paid_map.get(item["instalment_id"], Decimal("0")) + item["amount"]
             for row in rows:
-                total = PaymentAllocation.objects.filter(instalment=row).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+                total = paid_map.get(row.id, Decimal("0"))
                 if total >= row.amount:
                     row.status, row.paid_on = Instalment.Status.PAID, payload.paid_on
                 elif total > 0:
@@ -477,9 +482,8 @@ def record_payment(request, payload: PaymentIn):
             kind="payment_recorded", category=Event.Category.MONEY, polarity=1, title=f"Payment recorded for {inv.number}",
             detail=f"Recorded {payload.amount} {inv.currency}.", amount=payload.amount, occurred_at=timezone.now())
         if rows:
-            current_rows = list(inv.instalments.all())
             new_verdict = evaluate_plan_verdict([{"due_date": r.due_date, "paid_on": r.paid_on, "status": r.status,
-                "grace_days": r.grace_days, "amount": r.amount} for r in current_rows])
+                "grace_days": r.grace_days, "amount": r.amount} for r in rows])
             if prior_verdict != new_verdict:
                 plan_meta = PlanMeta.objects.filter(invoice=inv).first()
                 if plan_meta:
