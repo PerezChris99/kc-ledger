@@ -47,6 +47,12 @@ DB_PATH = Path(os.environ.get("LEDGER_DB_PATH", BASE_DIR / "data" / "ledger.sqli
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": DB_PATH, "OPTIONS": {"timeout": 20}}}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 16}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = os.environ.get("LEDGER_TIME_ZONE", "Africa/Kampala")
 USE_I18N = True
