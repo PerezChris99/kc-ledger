@@ -237,6 +237,7 @@ def session_status(request):
 @router.get("/clients")
 def list_clients(request, q: str = "", status: str = "", limit: int = 50, offset: int = 0):
     limit = min(max(limit, 1), 100)
+    offset = max(0, min(offset, 1_000_000))
     qs = Client.objects.all().order_by("name")
     if q.strip():
         from django.db.models import Q
