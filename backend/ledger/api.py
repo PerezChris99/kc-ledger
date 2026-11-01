@@ -464,8 +464,9 @@ def record_payment(request, payload: PaymentIn):
                 "amount": r.amount, "allocated": paid_map.get(r.id, Decimal("0")), "status": r.status} for r in rows], payload.amount)
             for item in allocation["allocations"]:
                 PaymentAllocation.objects.create(payment=payment, instalment_id=item["instalment_id"], amount=item["amount"])
+                paid_map[item["instalment_id"]] = paid_map.get(item["instalment_id"], Decimal("0")) + item["amount"]
             for row in rows:
-                total = PaymentAllocation.objects.filter(instalment=row).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+                total = paid_map.get(row.id, Decimal("0"))
                 if total >= row.amount:
                     row.status, row.paid_on = Instalment.Status.PAID, payload.paid_on
                 elif total > 0:
@@ -481,9 +482,8 @@ def record_payment(request, payload: PaymentIn):
             kind="payment_recorded", category=Event.Category.MONEY, polarity=1, title=f"Payment recorded for {inv.number}",
             detail=f"Recorded {payload.amount} {inv.currency}.", amount=payload.amount, occurred_at=timezone.now())
         if rows:
-            current_rows = list(inv.instalments.all())
             new_verdict = evaluate_plan_verdict([{"due_date": r.due_date, "paid_on": r.paid_on, "status": r.status,
-                "grace_days": r.grace_days, "amount": r.amount} for r in current_rows])
+                "grace_days": r.grace_days, "amount": r.amount} for r in rows])
             if prior_verdict != new_verdict:
                 plan_meta = PlanMeta.objects.filter(invoice=inv).first()
                 if plan_meta:
