@@ -12,7 +12,7 @@ KC Ledger is a single-owner financial application. It should remain bound to loc
 - Session middleware no longer writes the session row on every read-only request.
 - First-owner bootstrap validates the configured password against Django password validators.
 - Docker publishes the UI only on 127.0.0.1:8080, not every network interface.
-- nginx restricts the admin route to loopback clients.
+- Docker publishes the UI on the host loopback interface, so the Django admin and API are not exposed to the LAN by the default Compose configuration.
 - nginx adds a same-origin Content Security Policy and security headers, disables server tokens, limits request body size, and restricts the login route to POST.
 - Client scoring snapshots aggregate payments and expenses in SQL by client/currency rather than instantiating every payment and expense row in Python.
 - The one-second clock update is isolated in its own React component so the workspace does not rerender every second.
