@@ -2,8 +2,16 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "unsafe-development-only-change-me")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0").lower() in {"1", "true", "yes"}
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "unsafe-development-only-change-me"
+    else:
+        raise RuntimeError("DJANGO_SECRET_KEY must be configured outside development mode.")
+if not DEBUG and (len(SECRET_KEY) < 40 or SECRET_KEY.startswith(("unsafe-", "replace-with-"))):
+    raise RuntimeError("DJANGO_SECRET_KEY must be a unique random value of at least 40 characters.")
+
 ALLOWED_HOSTS = [v.strip() for v in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if v.strip()]
 CSRF_TRUSTED_ORIGINS = [v.strip() for v in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if v.strip()]
 ROOT_URLCONF = "config.urls"
@@ -51,19 +59,20 @@ STORAGES = {
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_AGE = 43200
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-SESSION_SAVE_EVERY_REQUEST = True
+SESSION_SAVE_EVERY_REQUEST = False
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 if not DEBUG:
-    SESSION_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
-    CSRF_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
+    COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
+    SESSION_COOKIE_SECURE = COOKIE_SECURE
+    CSRF_COOKIE_SECURE = COOKIE_SECURE
     SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
-    if os.environ.get("COOKIE_SECURE", "0") == "1":
-        SECURE_SSL_REDIRECT = True
-        SECURE_HSTS_SECONDS = 31536000
-        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-        SECURE_HSTS_PRELOAD = False
+    SECURE_HSTS_SECONDS = 31536000 if COOKIE_SECURE else 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = COOKIE_SECURE
+    SECURE_HSTS_PRELOAD = False
+    SECURE_SSL_REDIRECT = COOKIE_SECURE
