@@ -150,20 +150,23 @@ def _client_snapshot(client):
                 "status": r.status, "grace_days": r.grace_days, "amount": r.amount} for r in rows]))
 
     collected_by_client = {}
-    for payment in Payment.objects.select_related("client", "invoice").all():
-        value = convert(payment.amount, payment.invoice.currency)
+    payment_totals = Payment.objects.values("client_id", "invoice__currency").annotate(total=Sum("amount"))
+    for row in payment_totals.iterator(chunk_size=256):
+        currency = row["invoice__currency"]
+        value = convert(row["total"], currency)
         if value is None:
-            if payment.client_id == client.id:
-                currency_gaps.add(payment.invoice.currency)
+            if row["client_id"] == client.id:
+                currency_gaps.add(currency)
             continue
-        collected_by_client[payment.client_id] = collected_by_client.get(payment.client_id, Decimal("0")) + value
+        collected_by_client[row["client_id"]] = collected_by_client.get(row["client_id"], Decimal("0")) + value
     lifetime_collected = collected_by_client.get(client.id, Decimal("0"))
     best_client_collected = max(collected_by_client.values(), default=Decimal("0"))
     expenses_total = Decimal("0")
-    for expense in Expense.objects.filter(client=client):
-        value = convert(expense.amount, expense.currency)
+    expense_totals = Expense.objects.filter(client=client).values("currency").annotate(total=Sum("amount"))
+    for row in expense_totals:
+        value = convert(row["total"], row["currency"])
         if value is None:
-            currency_gaps.add(expense.currency)
+            currency_gaps.add(row["currency"])
         else:
             expenses_total += value
     total_hours = TimeEntry.objects.filter(client=client).aggregate(total=Sum("hours"))["total"] or Decimal("0")
