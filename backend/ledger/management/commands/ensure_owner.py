@@ -1,6 +1,8 @@
 import os
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 
 class Command(BaseCommand):
     help = "Create the initial staff superuser from environment secrets, if absent."
@@ -19,6 +21,11 @@ class Command(BaseCommand):
         User = get_user_model()
         user = User.objects.filter(username=username).first()
         if user is None:
+            candidate = User(username=username)
+            try:
+                validate_password(password, user=candidate)
+            except ValidationError as exc:
+                raise CommandError("LEDGER_PASSWORD does not meet the configured password policy: " + "; ".join(exc.messages)) from exc
             User.objects.create_superuser(username=username, email="", password=password)
             self.stdout.write(self.style.SUCCESS(f"Created owner account {username}."))
         elif not user.is_staff or not user.is_active:
