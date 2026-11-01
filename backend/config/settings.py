@@ -1,11 +1,12 @@
 import os
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0").lower() in {"1", "true", "yes"}
 if not SECRET_KEY:
-    if DEBUG:
+    if DEBUG or "pytest" in sys.modules or "test" in sys.argv:
         SECRET_KEY = "unsafe-development-only-change-me"
     else:
         raise RuntimeError("DJANGO_SECRET_KEY must be configured outside development mode.")
