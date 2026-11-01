@@ -12,8 +12,8 @@ export default defineConfig({
         name: "KC Ledger",
         short_name: "KC Ledger",
         description: "Private financial operations console",
-        theme_color: "#0B0F14",
-        background_color: "#0B0F14",
+        theme_color: "#0B1B3D",
+        background_color: "#0B1B3D",
         display: "standalone",
         start_url: "/",
         icons: [
