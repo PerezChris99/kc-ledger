@@ -981,13 +981,23 @@ def update_engagement(request, engagement_id: int, payload: EngagementPatch):
         raise HttpError(422, "Unsupported engagement status.")
     if "agreed_amount" in changes and changes["agreed_amount"] < 0:
         raise HttpError(422, "Agreed amount cannot be negative.")
-    if "agreed_amount" in changes and changes["agreed_amount"] != changes["agreed_amount"].quantize(Decimal("0.01")):
+    if "agreed_amount" in changes and changes["agreed_amount"] != changes["agreed_amount"].quantize(
+        Decimal("0.01")
+    ):
         raise HttpError(422, "Agreed amount supports at most two decimal places.")
     if "rate" in changes and changes["rate"] is not None and changes["rate"] < 0:
         raise HttpError(422, "Rate cannot be negative.")
-    if "rate" in changes and changes["rate"] is not None and changes["rate"] != changes["rate"].quantize(Decimal("0.01")):
+    if (
+        "rate" in changes
+        and changes["rate"] is not None
+        and changes["rate"] != changes["rate"].quantize(Decimal("0.01"))
+    ):
         raise HttpError(422, "Rate supports at most two decimal places.")
-    if "end_date" in changes and engagement.start_date and changes["end_date"] < engagement.start_date:
+    if (
+        "end_date" in changes
+        and engagement.start_date
+        and changes["end_date"] < engagement.start_date
+    ):
         raise HttpError(422, "Engagement end date cannot precede its start date.")
     if "currency" in changes:
         changes["currency"] = changes["currency"].upper()

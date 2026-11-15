@@ -25,9 +25,14 @@ def test_client_creation_rolls_back_when_audit_write_fails(staff_client):
 def test_invoice_edit_rolls_back_when_audit_write_fails(staff_client):
     owner = Client.objects.create(name="Rollback client")
     invoice = Invoice.objects.create(
-        client=owner, number="ROLLBACK-001", title="Original",
-        issue_date=date.today(), due_date=date.today() + timedelta(days=7),
-        amount=Decimal("100.00"), currency="USD", status=Invoice.Status.SENT,
+        client=owner,
+        number="ROLLBACK-001",
+        title="Original",
+        issue_date=date.today(),
+        due_date=date.today() + timedelta(days=7),
+        amount=Decimal("100.00"),
+        currency="USD",
+        status=Invoice.Status.SENT,
     )
     with patch("ledger.api.Event.objects.create", side_effect=RuntimeError("audit unavailable")):
         with pytest.raises(RuntimeError, match="audit unavailable"):
@@ -44,7 +49,9 @@ def test_invoice_edit_rolls_back_when_audit_write_fails(staff_client):
 def test_engagement_edit_rejects_invalid_dates_and_recurring_bounds(staff_client):
     owner = Client.objects.create(name="Engagement validation")
     engagement = Engagement.objects.create(
-        client=owner, name="Valid engagement", start_date=date.today(),
+        client=owner,
+        name="Valid engagement",
+        start_date=date.today(),
         recurring_interval_days=0,
     )
     invalid = [
@@ -56,7 +63,8 @@ def test_engagement_edit_rejects_invalid_dates_and_recurring_bounds(staff_client
     for patch_values in invalid:
         response = staff_client.patch(
             f"/api/engagements/{engagement.pk}",
-            data=patch_values, content_type="application/json",
+            data=patch_values,
+            content_type="application/json",
         )
         assert response.status_code == 422, (patch_values, response.content)
     engagement.refresh_from_db()
