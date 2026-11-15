@@ -1,33 +1,93 @@
+"""Verified atomic SQLite backups with configurable retention and secondary copy."""
 import os
+import shutil
 import sqlite3
-from datetime import date
+import tempfile
+from datetime import datetime
 from pathlib import Path
+
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
+
+def check_integrity(path: Path) -> None:
+    with sqlite3.connect(f"file:{path.resolve().as_posix()}?mode=ro", uri=True) as handle:
+        row = handle.execute("PRAGMA integrity_check").fetchone()
+    if not row or row[0] != "ok":
+        raise CommandError(f"Database integrity check failed: {path}")
+
+
+def write_backup(destination: Path, source_connection) -> Path:
+    """Write a consistent snapshot then atomically install it into its final path."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(
+        prefix=".kc-ledger-backup-", suffix=".sqlite3", dir=str(destination.parent)
+    )
+    os.close(fd)
+    temporary_path = Path(temporary)
+    try:
+        with sqlite3.connect(str(temporary_path), timeout=30) as target:
+            source_connection.backup(target)
+        check_integrity(temporary_path)
+        try:
+            os.chmod(temporary_path, 0o600)
+        except OSError:
+            pass
+        os.replace(temporary_path, destination)
+        return destination
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def copy_secondary(source: Path, directory: Path) -> Path:
+    """Copy the verified snapshot off the primary volume, atomically."""
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / source.name
+    fd, temp = tempfile.mkstemp(prefix=".kc-ledger-copy-", suffix=".sqlite3", dir=str(directory))
+    os.close(fd)
+    temporary = Path(temp)
+    try:
+        shutil.copyfile(source, temporary)
+        check_integrity(temporary)
+        os.replace(temporary, target)
+        return target
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 class Command(BaseCommand):
-    help = "Create and integrity-check a consistent SQLite backup using the online backup API."
+    help = "Back up the live SQLite database via its online API and verify the backup."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--directory", default=None, help="Primary backup directory")
+        parser.add_argument("--keep", type=int, default=14, help="Number of backups to retain")
 
     def handle(self, *args, **options):
         if connection.vendor != "sqlite":
-            raise CommandError("This backup command is intended for the configured SQLite database.")
+            raise CommandError("KC Ledger backup requires SQLite.")
+        if options["keep"] < 1 or options["keep"] > 1000:
+            raise CommandError("--keep must be between 1 and 1000.")
+        database = Path(connection.settings_dict["NAME"])
+        backup_dir = Path(
+            options["directory"] or os.environ.get("LEDGER_BACKUP_DIR")
+            or database.parent / "backups"
+        ).expanduser().resolve()
         connection.ensure_connection()
         source = connection.connection
         if source is None:
-            raise CommandError("Database connection could not be opened.")
-        backup_dir = Path(os.environ.get("LEDGER_BACKUP_DIR", "/app/data/backups"))
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        destination = backup_dir / f"ledger-{date.today().isoformat()}.sqlite3"
-        try:
-            with sqlite3.connect(destination) as target:
-                source.backup(target)
-                result = target.execute("PRAGMA integrity_check").fetchone()
-                if not result or result[0] != "ok":
-                    raise CommandError(f"Backup integrity check failed: {result}")
-        except Exception as exc:
-            destination.unlink(missing_ok=True)
-            raise CommandError(f"Backup failed: {exc}") from exc
-        backups = sorted(backup_dir.glob("ledger-*.sqlite3"), key=lambda item: item.stat().st_mtime, reverse=True)
-        for old in backups[14:]:
+            raise CommandError("No open SQLite connection.")
+        filename = datetime.now().strftime("ledger-%Y%m%d-%H%M%S-%f.sqlite3")
+        destination = write_backup(backup_dir / filename, source)
+        secondary = os.environ.get("LEDGER_SECONDARY_BACKUP_DIR", "").strip()
+        if secondary:
+            secondary_path = Path(secondary).expanduser().resolve()
+            if secondary_path == backup_dir:
+                raise CommandError("Secondary backup location must differ from primary.")
+            copy_secondary(destination, secondary_path)
+        backups = sorted(
+            backup_dir.glob("ledger-*.sqlite3"), key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for old in backups[options["keep"]:]:
             old.unlink(missing_ok=True)
         self.stdout.write(self.style.SUCCESS(f"Backup verified: {destination}"))
