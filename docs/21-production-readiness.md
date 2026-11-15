@@ -1,60 +1,70 @@
-# Production readiness audit
+# Production readiness and release runbook
 
-This document records source-level findings and validation gates for the private KC Ledger deployment. It distinguishes implemented changes from checks that require executing the application.
+## Status as of 2026-11-15
 
-## Operating boundary
+The latest merged `main` commit `df094e3e4696e4da30742725f062adb1ce4937c1` passed the existing five-job GitHub CI suite: Django tests/Ruff/Python advisory scan; JS/JSX lint/Vite build/npm audit; Docker build and health; Chromium browser E2E; Windows executable/installer build and packaged backend smoke.
 
-KC Ledger is a single-owner financial application. It should remain bound to localhost unless a separate remote-access security design is approved. SQLite in WAL mode is appropriate for this workload; do not add distributed infrastructure without a measured need.
+**Important:** a green CI run means that *those checks* passed, not that every possible financial edge case, keyboard interaction or clean-device installation has been exercised. Any later commit needs a fresh run; do not reuse these results as its verification.
 
-## Source-level issues addressed
+## Threat model and safety boundaries
 
-- Production settings reject a missing, placeholder, or short Django secret key. Tests and explicit development mode retain a test/development fallback.
-- Session middleware no longer writes the session row on every read-only request.
-- First-owner bootstrap validates the configured password against Django password validators.
-- Docker publishes the UI only on 127.0.0.1:8080, not every network interface.
-- Docker publishes the UI on the host loopback interface, so the Django admin and API are not exposed to the LAN by the default Compose configuration.
-- nginx adds a same-origin Content Security Policy and security headers, disables server tokens, limits request body size, and restricts the login route to POST.
-- Client scoring snapshots aggregate payments and expenses in SQL by client/currency rather than instantiating every payment and expense row in Python.
-- The one-second clock update is isolated in its own React component so the workspace does not rerender every second.
-- Client, invoice, and event pagination offsets are clamped to non-negative bounded values.
+KC Ledger is single-owner financial software. Restrict access to one trusted operator and the loopback interface. The Docker frontend binds to `127.0.0.1:8080`. The desktop Waitress server binds to a random `127.0.0.1` port. The client cannot bypass Django's validation; state changes require staff session credentials and CSRF protection. The persistent login throttle resists restart resets. Audit events are append-only. Data at rest is **not encrypted by the application** and must be protected using operating-system account security and backup policy.
 
-## Remaining security work
+Do not publish an HTTP-only deployment to the public internet. A remotely accessible deployment requires a separately designed authentication, TLS and reverse-proxy security model and additional penetration checks.
 
-1. Replace process-local login throttling with a persistent, atomic throttle suitable for restarts and future multi-process operation.
-2. Add explicit request-body and query-string length limits at the application layer, plus stricter validation for every currency, amount, date, and enum input.
-3. Review all mutation endpoints for transaction boundaries, idempotency, and audit-event coverage.
-4. Decide whether Django admin should be disabled entirely in the packaged desktop edition.
-5. Add a desktop-specific origin/host policy and ensure the local listener binds only to 127.0.0.1.
-6. Lock Python and npm dependency resolution and run dependency vulnerability reviews.
-7. Verify backup encryption and an off-device backup destination. The current SQLite online backup command integrity-checks backups but does not encrypt them.
+## Developer verification before merge
 
-## Remaining performance work
+```bash
+python -m pip install -e ".[dev]"
+python backend/manage.py check
+python backend/manage.py makemigrations --check --dry-run
+python backend/manage.py migrate --plan
+pytest -q
+ruff check backend
+ruff format --check backend
+npm ci
+npm run verify:source
+npm run lint
+npm run build
+npm audit --audit-level=high
+```
 
-1. Convert remaining full-table Python aggregations in Insights and target calculations to grouped SQL aggregates.
-2. Eliminate per-invoice instalment queries in client scoring by loading a client's schedules in one query.
-3. Add query-count and query-plan regression tests for dashboard, client dossier, insights, and scoring.
-4. Measure frontend production bundle size and split chart-heavy routes if the initial bundle is too large.
-5. Verify SQLite indexes against actual query plans and add indexes only where EXPLAIN QUERY PLAN shows a meaningful scan.
-6. Keep a single web worker for SQLite and the in-process scheduler. If the process model changes, run scheduled jobs in one explicitly supervised process rather than one per web worker.
+Run browser E2E against an **isolated test** instance with `npx playwright test`. Never run seeded tests against real financial data. CI additionally launches Docker and runs the Windows builder and packaged executable self-test.
 
-## Launch validation gates
+## Financial acceptance scenarios
 
-These are not complete until executed on a real desktop and target deployment:
+- Create/edit client; archive and verify unchanged retained history.
+- Create invoice, record partial and final payments, prevent overpayment, verify outstanding balances and statuses.
+- Create a multi-instalment plan, allocate FIFO, observe verdicts and reject edits after payment allocation.
+- Test disputed, written-off, paid and partially paid invoice transitions, including forbidden updates and correct receivables.
+- Add/edit/archive/restore engagements, time entries and expenses; confirm live analytics and client-scoring refresh.
+- Verify currency conversion, known missing FX rates, manually stored rates and target projections.
+- Generate invoice and dossier PDF with real representative data and validate totals.
+- Verify authentication, CSRF, logout/session expiry, throttle and failed login behavior.
 
-- pytest
-- ruff check backend
-- npm run lint
-- npm run build
-- Django deployment checks with production environment variables
-- Login throttling, CSRF, session expiry, logout and inactive-user tests
-- Invoice creation, payment allocation, partial payment, write-off, plan edit and audit-history tests
-- PDF export tests with the production PDF runtime
-- SQLite backup, restore into a clean data directory, and post-restore integrity check
-- Desktop startup, shutdown, restart, offline operation, and data persistence
-- Browser console and network inspection at desktop and mobile breakpoints
+## Windows operator acceptance checklist
 
-A source change is not proof that the runtime passes these gates.
+1. Use a **clean Windows 10 and Windows 11 x64 environment**, not solely the GitHub-hosted build runner. Verify a standard non-admin installation and WebView2 prerequisite setup.
+2. Launch and create the owner account; verify no default credentials, no external port binding and a working native WebView window.
+3. Use a disposable ledger to exercise the financial acceptance scenarios above and read exported PDF documents.
+4. Close/reopen; force-stop and restart; ensure SQLite integrity and data retention, scheduler single-instance behavior and no startup crash loops.
+5. Install over an older version with a **copy** of an old test database; verify backup-before-migration and migration compatibility.
+6. Uninstall and reinstall; ensure user financial data remains where intended. Verify removal instructions separately if the user chooses to destroy data.
+7. Restore an integrity-checked backup into a disposable data folder with the app stopped. Verify record counts, amounts and scores.
+8. Confirm expected offline startup with the Windows WebView2 prerequisite already installed. Test CPU/memory and Windows Defender/SmartScreen behavior.
+9. Sign release binaries with the appropriate trusted publisher certificate; publish checksums, version, artifact provenance and instructions.
 
-## Change log
+**Release rule:** Do not publish a signed production release until these device and operational checks are recorded as passed. Claims of 100% software correctness cannot be established by source inspection alone.
 
-- 2026-11-01: Recorded production security, performance, and runtime validation findings.
+## Third-party and operations decisions
+
+- Exchange-rate feed: `EXCHANGERATE_HOST_ACCESS_KEY` and provider plan need a real-world test; manual pair entry is supported.
+- Backups: configure an off-device/secondary destination, secure access, retention and optional encryption, then demonstrate recovery.
+- Distribution: decide versioning, signing identity, private access policy, code-ownership and software-license wording for intended recipients.
+- Mobile/PWA: validate viewport, install prompt, keyboard/focus and accessibility in real browsers; financial mutations require a live API.
+
+## CI evidence
+
+[Latest merged-run source and package verification](https://github.com/PerezChris99/kc-ledger/actions/runs/43716306301) (2026-11-15). The current pipeline files are in `.github/workflows/`. After any change, inspect the **new** run results and address regressions.
+
+_Updated 2026-11-15; supersedes the older 2026-11-01 audit and remaining-work list._

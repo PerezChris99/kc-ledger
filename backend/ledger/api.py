@@ -1025,8 +1025,8 @@ def list_time_entries(request, client_id: int | None = None, limit: int = 100):
 
 @router.post("/time-entries")
 def create_time_entry(request, payload: TimeEntryIn):
-    if payload.hours <= 0:
-        raise HttpError(422, "Hours must be positive.")
+    if payload.hours <= 0 or payload.hours != payload.hours.quantize(Decimal("0.01")):
+        raise HttpError(422, "Hours must be positive with at most two decimal places.")
     if payload.category not in TimeEntry.Category.values:
         raise HttpError(422, "Unsupported time-entry category.")
     try:

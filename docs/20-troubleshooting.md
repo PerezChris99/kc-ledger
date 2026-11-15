@@ -1,16 +1,45 @@
-# Troubleshooting and recovery
+# Troubleshooting, maintenance and recovery
 
-## SQLite locked
-The connection uses a 20-second busy timeout, WAL mode, foreign keys and NORMAL synchronous mode. Avoid copying the live database file while writes are in progress. Use python manage.py backup_ledger to create a consistent backup through SQLite's online backup API.
+## GitHub still lists TypeScript
 
-## Migrations
-Back up the database before schema changes. Review python manage.py showmigrations and python manage.py migrate --plan before applying migrations. Do not delete migration history or use syncdb on an established production database.
+The merged default branch has no `.ts` or `.tsx` files. After PR #8 GitHub Linguist may display stale language statistics until repository indexing refreshes. Confirm `main` HEAD, inspect the tree, and run `npm run verify:source` on a fresh clone; do not rewrite working JSX to influence the statistics.
+
+## Backend starts but frontend cannot reach it
+
+For Docker use `docker compose ps`, `docker compose logs -f api`, and visit <http://127.0.0.1:8080/health>. For source mode verify `DJANGO_SECRET_KEY` and run `python backend/manage.py check`; the development API must listen on `127.0.0.1:8000`. Vite proxies `/api` there. Do not expose Django's development server publicly.
+
+## Login or CSRF errors
+
+Use the actual configured owner account; no default desktop login is shipped. The first Docker owner is created once, from `LEDGER_USERNAME` and `LEDGER_PASSWORD`. Verify cookie and CSRF responses and the nginx Host header when using the Docker route. A repeated-failure throttle persists in SQLite across restarts. Do not disable CSRF to solve a reverse-proxy issue.
+
+## SQLite lock or migration issue
+
+Keep one intended writer/scheduler process and let WAL/SQLite apply its busy timeout. Do not manually copy a live `ledger.sqlite3` as a consistent backup. Run `python backend/manage.py backup_ledger` instead. Before a version upgrade run `python backend/manage.py showmigrations` and `python backend/manage.py migrate --plan`; take a verified backup, then migrate. Never delete production migration files.
+
+## Recovering financial data
+
+**Stop all KC Ledger processes before applying restore.** Validate first:
+
+```bash
+python backend/manage.py restore_ledger /path/to/backup.sqlite3
+```
+
+Apply only when you have checked the target and retained a second copy:
+
+```bash
+python backend/manage.py restore_ledger /path/to/backup.sqlite3 --apply --confirm RESTORE-LEDGER
+```
+
+Restore code creates a pre-restore safety backup and verifies database integrity. The backup is **not encrypted automatically**; protect copies and test the complete recovery workflow before relying on it.
 
 ## Stale PWA assets
-The service worker caches only the application shell and static assets, never API responses. Close and reopen the installed app after a release; if assets remain stale, unregister the service worker from browser developer tools and reload.
 
-## Authentication
-Verify LEDGER_USERNAME, LEDGER_PASSWORD and DJANGO_SECRET_KEY in the private environment file. The initial owner password is not reset automatically on restart. Use HTTPS and set COOKIE_SECURE=1 behind a TLS-terminating reverse proxy.
+PWA caches static UI assets, not live ledger API responses. After updating, close/reopen the app, then clear the browser service worker/cache if needed. Offline access to cached UI is not a substitute for offline transaction support.
 
-## Changelog
-- 2026-10-28: Added backup, migration and PWA troubleshooting notes.
+## Windows installer/WebView2
+
+Build with Python 3.12, Node 22 and Inno Setup 6. The installer includes Microsoft's signed WebView2 bootstrapper but may need internet to fetch WebView2 on first installation. Windows runtime data lives in `%LOCALAPPDATA%\KCLedger`. The installer should not erase this directory on uninstall.
+
+See [Windows packaging](23-windows-desktop.md), [release checklist](21-production-readiness.md), and [test matrix](24-verification-matrix.md).
+
+_Updated 2026-11-15._
