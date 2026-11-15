@@ -439,12 +439,10 @@ def list_notifications(request, since: datetime | None = None, limit: int = 30):
 
 @router.get("/clients/{client_id}/dossier.pdf")
 def export_client_dossier(request, client_id: int):
-    from django.conf import settings as django_settings
     from django.http import HttpResponse
-    from django.template.loader import render_to_string
-    from weasyprint import HTML
     from ledger.api import _client_snapshot
     from ledger.services.scoring import compute_client_score
+    from ledger.services.pdf import client_dossier_pdf
     try:
         client = Client.objects.get(pk=client_id)
     except Client.DoesNotExist:
@@ -458,23 +456,19 @@ def export_client_dossier(request, client_id: int):
             "status": invoice.status, "currency": invoice.currency, "amount": invoice.amount,
             "outstanding": Decimal("0") if invoice.status == Invoice.Status.WRITTEN_OFF else max(Decimal("0"), invoice.amount-paid)})
     events = list(client.events.filter(deleted_at__isnull=True).order_by("-occurred_at")[:250])
-    html = render_to_string("ledger/client_dossier.html", {
-        "client": client, "score": score, "invoices": invoices, "events": events,
-        "currency": snapshot["base_currency"], "collected": f"{snapshot['lifetime_collected']:.2f}",
-        "open_invoice_count": sum(1 for item in invoices if item["outstanding"] > 0),
-        "generated_at": timezone.localtime().strftime("%Y-%m-%d %H:%M %Z"),
-    })
-    pdf = HTML(string=html, base_url=str(django_settings.BASE_DIR)).write_pdf()
+    pdf = client_dossier_pdf(
+        client, score, invoices, events, snapshot["base_currency"],
+        f"{snapshot['lifetime_collected']:.2f}",
+    )
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="client-{client.id}-dossier.pdf"'
     return response
 
+
 @router.get("/invoices/{invoice_id}/pdf")
 def export_invoice_pdf(request, invoice_id: int):
-    from django.conf import settings as django_settings
     from django.http import HttpResponse
-    from django.template.loader import render_to_string
-    from weasyprint import HTML
+    from ledger.services.pdf import invoice_pdf
     try:
         invoice = Invoice.objects.select_related("client", "engagement").get(pk=invoice_id)
     except Invoice.DoesNotExist:
@@ -482,12 +476,11 @@ def export_invoice_pdf(request, invoice_id: int):
     paid = invoice.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
     payments = list(invoice.payments.order_by("paid_on", "id"))
     instalments = list(invoice.instalments.order_by("seq"))
-    html = render_to_string("ledger/invoice.html", {
-        "invoice": invoice, "payments": payments, "instalments": instalments,
-        "collected": f"{paid:.2f}", "outstanding": f"{(Decimal('0') if invoice.status == Invoice.Status.WRITTEN_OFF else max(Decimal('0'), invoice.amount-paid)):.2f}",
-        "generated_at": timezone.localtime().strftime("%Y-%m-%d %H:%M %Z"),
-    })
-    pdf = HTML(string=html, base_url=str(django_settings.BASE_DIR)).write_pdf()
+    outstanding = (
+        Decimal("0") if invoice.status == Invoice.Status.WRITTEN_OFF
+        else max(Decimal("0"), invoice.amount - paid)
+    )
+    pdf = invoice_pdf(invoice, payments, instalments, paid, outstanding)
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="invoice-{invoice.id}.pdf"'
     return response

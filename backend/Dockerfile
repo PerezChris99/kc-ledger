@@ -1,8 +1,8 @@
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential python3-dev libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir "Django>=5.2,<5.3" "django-ninja>=1.3,<2" "APScheduler>=3.10,<4" "pandas>=2.2,<3" "WeasyPrint>=62,<70" "gunicorn>=22,<24" "whitenoise>=6.7,<7"
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir "Django>=5.2,<5.3" "django-ninja>=1.3,<2" "APScheduler>=3.10,<4" "reportlab>=4.3,<5" "gunicorn>=22,<24" "whitenoise>=6.7,<7"
 COPY backend/ ./backend/
 WORKDIR /app/backend
 RUN mkdir -p /app/data && DJANGO_DEBUG=1 python manage.py collectstatic --noinput \
