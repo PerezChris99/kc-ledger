@@ -2,7 +2,7 @@
 
 **Private single-owner financial operations console** for clients, engagements, invoices, instalment payments, expenses, work entries, goals, risk scoring, reporting and auditable financial history.
 
-**Primary database:** local PostgreSQL 15+; **SQLite WAL:** safe fallback, never silently synchronized. The frontend uses React/JavaScript/JSX and Vite; backend uses Django 5.2/Ninja, APScheduler and ReportLab. The native Windows application hosts Django locally through Waitress + WebView2.
+**Primary database:** local PostgreSQL 15+ or managed PostgreSQL on Vercel; **SQLite WAL:** controlled desktop-only fallback, never silently synchronized. The frontend uses React/JavaScript/JSX and Vite; backend uses Django 5.2/Ninja, APScheduler and ReportLab. The native Windows application hosts Django locally through Waitress + WebView2.
 
 ## Architecture
 
@@ -26,6 +26,19 @@ flowchart LR
 | Recovery | PostgreSQL custom-format `pg_dump/pg_restore`; SQLite online backup |
 | Windows | Waitress, pywebview/WebView2, PyInstaller + Inno Setup |
 | Tests | pytest/Django, real PostgreSQL CI, SQLite CI, Docker, Chromium E2E, Windows smoke |
+
+## Releases and automatic updates
+
+KC Ledger uses a single root [VERSION](VERSION) consumed by Node, Django and Inno Setup. Every built client and API response identifies its version, short Git SHA, build timestamp, release channel and minimum supported version. The footer displays the active build.
+
+**Web:** CI verifies SQLite/PostgreSQL financial tests, frontend, Docker, Chromium and Windows. After an approved Vercel project is connected and its `KC_LEDGER_VERCEL_READY` flag is enabled, GitHub Actions stages production without moving the public domain, backs up and migrates the managed PostgreSQL database, validates the staged `/api/health` and `/api/version`, then promotes the tested deployment. PRs use Vercel Git previews. The production Git integration must **not auto-promote before the CI migration gate**.
+
+**Windows:** tagged `vX.Y.Z` releases build, sign and smoke-test an Inno installer. The native app checks a GitHub Release manifest, stages a download over HTTPS, verifies SHA-256, Authenticode signer and embedded version, then requests restart. Install upgrades first back up binary files and PostgreSQL/SQLite data and preserve the user-specific `.env` and database pin. Unsigned updates are never accepted.
+
+**External setup is required before live deployment or signed release:** Vercel project + managed PostgreSQL + scoped secrets, and a trusted Windows code-signing certificate. These are intentionally not embedded in Git.
+
+- [Deployment, signed update and rollback runbook](docs/26-updates-and-deployment.md)
+- [Update verification matrix](docs/27-update-verification.md)
 
 ## Local installation with PostgreSQL
 

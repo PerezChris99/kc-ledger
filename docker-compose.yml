@@ -22,6 +22,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        LEDGER_GIT_SHA: ${GITHUB_SHA:-unknown}
     env_file: .env
     environment:
       LEDGER_DB_ENGINE: postgres
@@ -57,6 +59,8 @@ services:
     build:
       context: .
       dockerfile: frontend.Dockerfile
+      args:
+        LEDGER_GIT_SHA: ${GITHUB_SHA:-unknown}
     ports: ["127.0.0.1:8080:80"]
     depends_on:
       api:

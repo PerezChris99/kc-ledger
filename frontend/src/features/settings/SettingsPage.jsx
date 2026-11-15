@@ -2,6 +2,67 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, money } from "../../api";
 const defaultSounds = { success: true, info: true, warning: true, alarm: true };
+function DesktopUpdateSettings() {
+    const current = useQuery({
+        queryKey: ["desktop-update-settings"],
+        queryFn: () => api("/api/desktop/updates"),
+        retry: false,
+    });
+    const [policy, setPolicy] = useState("auto_download");
+    const [channel, setChannel] = useState("stable");
+    const [status, setStatus] = useState("");
+    const [busy, setBusy] = useState(false);
+    useEffect(() => {
+        if (current.data) {
+            setPolicy(current.data.policy);
+            setChannel(current.data.channel);
+        }
+    }, [current.data]);
+    if (!current.data) return null;
+    async function save() {
+        setBusy(true);
+        try {
+            await api("/api/desktop/updates", {
+                method: "POST", body: JSON.stringify({ policy, channel })
+            });
+            setStatus("Update preferences saved on this computer.");
+        } catch {
+            setStatus("Could not save update preferences.");
+        } finally { setBusy(false); }
+    }
+    async function check() {
+        setBusy(true);
+        try {
+            await api("/api/desktop/updates", {
+                method: "POST", body: JSON.stringify({ action: "check" })
+            });
+            setStatus("Checking signed releases. Any verified update will open a native prompt.");
+        } catch {
+            setStatus("Could not start an update check.");
+        } finally { setBusy(false); }
+    }
+    return <section className="panel">
+      <div className="panel-heading"><span>WINDOWS APP UPDATES</span><span className="panel-period">SIGNED RELEASES ONLY</span></div>
+      <div className="form-row">
+        <label>UPDATE POLICY<select value={policy} onChange={e => setPolicy(e.target.value)}>
+          <option value="auto_download">Auto-download, ask before restart</option>
+          <option value="install_on_exit">Install on exit</option>
+          <option value="manual">Manual only</option>
+        </select></label>
+        <label>CHANNEL<select value={channel} onChange={e => setChannel(e.target.value)}>
+          <option value="stable">Stable</option>
+          <option value="beta">Beta</option>
+        </select></label>
+      </div>
+      <div className="form-row">
+        <button type="button" className="primary-button" onClick={save} disabled={busy}>Save update preferences</button>
+        <button type="button" className="small-button" onClick={check} disabled={busy}>Check for updates</button>
+      </div>
+      <p className="settings-note">Installer publisher, SHA-256 and version are verified before an update runs. Local data and database choice are preserved.</p>
+      {status && <p role="status">{status}</p>}
+    </section>;
+}
+
 export default function SettingsPage() {
     const [name, setName] = useState("");
     const [editingTarget, setEditingTarget] = useState(null);
@@ -132,6 +193,7 @@ export default function SettingsPage() {
     <section className="panel"><div className="panel-heading"><span>SAVED TARGETS</span><span className="panel-period">{targets.data?.items.length ?? 0} RECORDS</span></div>{targets.data?.items.map(t => <div className="target-row" key={t.id}><div className="target-row-main"><strong>{t.name}</strong><small>{t.type} · deadline {t.deadline} · {t.days_remaining} days remaining</small><div className="target-track"><span style={{ width: `${Math.max(0, Math.min(100, t.progress_pct))}%` }}/></div><small>{t.type === "revenue" ? money(t.current, t.currency) : t.current} / {t.type === "revenue" ? money(t.amount, t.currency) : t.amount} · {t.pace_status.replace("_", " ")}</small></div><div className="target-row-actions"><strong className="mono">{t.progress_pct.toFixed(0)}%</strong><button type="button" className="small-button" onClick={() => editTarget(t)} disabled={targetBusy} aria-label={`Edit ${t.name}`}>Edit</button><button type="button" className="small-button" onClick={() => void archiveTarget(t)} disabled={targetBusy} aria-label={`Archive ${t.name}`}>Archive</button></div></div>)}{targets.isLoading && <p className="empty-message">Loading targets…</p>}{!targets.isLoading && !targets.data?.items.length && <p className="empty-message">No targets set yet.</p>}<p className="settings-note">Revenue and client targets use live server totals. Hour targets use recorded time entries.</p></section>
     <section className="panel"><div className="panel-heading"><span>REGIONAL AND CURRENCY SETTINGS</span><span className="panel-period">PERSISTENT</span></div><form className="form-stack" onSubmit={savePreferences}><div className="form-row"><label>BASE CURRENCY<input value={baseCurrency} onChange={e => setBaseCurrency(e.target.value.toUpperCase().slice(0, 3))} required minLength={3} maxLength={3}/></label><label>TIMEZONE<input value={timeZone} onChange={e => setTimeZone(e.target.value)} required placeholder="Africa/Kampala"/></label></div><p className="settings-note">Financial totals convert only when a matching stored FX rate exists. Timezone changes affect the preferred display timezone; backend scheduling currently follows the server timezone.</p><button className="primary-button" disabled={prefsBusy}>{prefsBusy ? "SAVING…" : "Save preferences"}</button>{prefsError && <p className="form-error">{prefsError}</p>}{prefsMessage && <p className="form-success">{prefsMessage}</p>}</form></section>
     <section className="panel"><div className="panel-heading"><span>SOUNDS AND NOTIFICATIONS</span><span className="panel-period">EVENT-DRIVEN</span></div><div className="settings-toggle"><div><strong>Browser notifications</strong><small>Show desktop notifications when the app is in the background.</small></div><input type="checkbox" checked={notificationsEnabled} onChange={e => setNotificationsEnabled(e.target.checked)} aria-label="Enable browser notifications"/></div><div className="notification-permission"><span>Permission: {permission}</span><button className="small-button" type="button" onClick={requestNotificationPermission}>Request permission</button></div>{Object.entries(sounds).map(([key, value]) => <div className="settings-toggle" key={key}><div><strong>{key.charAt(0).toUpperCase() + key.slice(1)} tones</strong><small>{key === "success" ? "Payment recorded or a plan becomes perfect" : key === "info" ? "General ledger event" : key === "warning" ? "Instalment due soon or plan at risk" : "Overdue invoice or broken plan"}</small></div><input type="checkbox" checked={Boolean(value)} onChange={e => setSounds(current => ({ ...current, [key]: e.target.checked }))} aria-label={`Enable ${key} sounds`}/></div>)}<button className="primary-button" onClick={() => void savePreferences()} disabled={prefsBusy}>Save sound preferences</button><p className="settings-note">Tones are synthesized locally with Web Audio. No audio files or network requests are required.</p></section>
-    <section className="panel security-panel"><div className="panel-heading"><span>SECURITY BASELINE</span><span className="panel-period">PRIVATE INSTANCE</span></div><div className="security-line"><strong>Session authentication</strong><span className="status-pill">Enabled</span></div><div className="security-line"><strong>CSRF protection</strong><span className="status-pill">Enabled</span></div><div className="security-line"><strong>Database</strong><span className="mono">SQLite / WAL</span></div><div className="security-line"><strong>Offline storage</strong><span className="mono">App shell only</span></div></section>
+    <DesktopUpdateSettings />
+    <section className="panel security-panel"><div className="panel-heading"><span>SECURITY BASELINE</span><span className="panel-period">PRIVATE INSTANCE</span></div><div className="security-line"><strong>Session authentication</strong><span className="status-pill">Enabled</span></div><div className="security-line"><strong>CSRF protection</strong><span className="status-pill">Enabled</span></div><div className="security-line"><strong>Database</strong><span className="mono">PostgreSQL primary · pinned SQLite fallback</span></div><div className="security-line"><strong>Offline storage</strong><span className="mono">App shell only</span></div></section>
   </div>;
 }

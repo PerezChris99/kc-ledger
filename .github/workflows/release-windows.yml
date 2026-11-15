@@ -1,0 +1,103 @@
+name: Signed KC Ledger Windows release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+  publish:
+    needs: verify
+    runs-on: windows-latest
+    environment: production-release
+    permissions:
+      contents: write
+    env:
+      KC_LEDGER_SIGNER_THUMBPRINT: ${{ vars.KC_LEDGER_SIGNER_THUMBPRINT }}
+      LEDGER_RELEASE_CHANNEL: ${{ vars.KC_LEDGER_RELEASE_CHANNEL || 'stable' }}
+      LEDGER_MIN_SUPPORTED_VERSION: ${{ vars.KC_LEDGER_MIN_SUPPORTED_VERSION }}
+      KC_LEDGER_MANIFEST_URL: ${{ vars.KC_LEDGER_MANIFEST_URL }}
+      KC_LEDGER_BETA_MANIFEST_URL: ${{ vars.KC_LEDGER_BETA_MANIFEST_URL }}
+      LEDGER_ROLLOUT_PERCENT: ${{ vars.KC_LEDGER_ROLLOUT_PERCENT || '100' }}
+      SIGN_CERT_PFX_BASE64: ${{ secrets.SIGN_CERT_PFX_BASE64 }}
+      SIGN_CERT_PASSWORD: ${{ secrets.SIGN_CERT_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate version, main ancestry and signer configuration
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ('${{ github.ref_name }}' -ne "v$version") { throw 'Tag and VERSION differ' }
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Tag commit is not merged into main' }
+          if (!$env:SIGN_CERT_PFX_BASE64 -or !$env:SIGN_CERT_PASSWORD -or !$env:KC_LEDGER_SIGNER_THUMBPRINT) { throw 'Publisher code-signing secrets are required' }
+      - name: Build Windows desktop and installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $env:PATH += ';C:\Program Files (x86)\Inno Setup 6'
+          & desktop\build_windows.ps1
+      - name: Sign and verify Authenticode publisher
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $installer = "installer-output\KCLedger-Setup-$version.exe"
+          if (!(Test-Path $installer)) { throw 'Installer missing' }
+          $cert = Join-Path $env:RUNNER_TEMP 'kc-release.pfx'
+          try {
+            [IO.File]::WriteAllBytes($cert, [Convert]::FromBase64String($env:SIGN_CERT_PFX_BASE64))
+            $signTool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+            if (!$signTool) { throw 'SignTool missing' }
+            & $signTool sign /fd SHA256 /f $cert /p $env:SIGN_CERT_PASSWORD /tr http://timestamp.digicert.com /td SHA256 $installer
+            if ($LASTEXITCODE -ne 0) { throw 'Signing failed' }
+            $sig = Get-AuthenticodeSignature -FilePath $installer
+            $expected = $env:KC_LEDGER_SIGNER_THUMBPRINT.Replace(' ', '').ToUpperInvariant()
+            if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Thumbprint.ToUpperInvariant() -ne $expected) { throw 'Publisher certificate mismatch' }
+          } finally { Remove-Item $cert -Force -ErrorAction SilentlyContinue }
+      - name: Clean Windows silent install, financial smoke, and uninstall
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $installer = (Resolve-Path "installer-output\KCLedger-Setup-$version.exe").Path
+          $setup = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw 'Installer failed' }
+          $installed = Join-Path $env:LOCALAPPDATA 'Programs\KC Ledger\KC Ledger.exe'
+          if (!(Test-Path $installed)) { throw 'Installed executable missing' }
+          $env:LEDGER_SMOKE_REPORT = Join-Path $env:RUNNER_TEMP 'installed-smoke.json'
+          $smoke = Start-Process -FilePath $installed -ArgumentList '--self-test' -Wait -PassThru
+          if ($smoke.ExitCode -ne 0) { throw 'Installed financial smoke failed' }
+          $report = Get-Content $env:LEDGER_SMOKE_REPORT -Raw | ConvertFrom-Json
+          if ($report.status -ne 'passed') { throw 'Installed financial smoke report failed' }
+          $uninstall = Join-Path $env:LOCALAPPDATA 'Programs\KC Ledger\unins000.exe'
+          if (!(Test-Path $uninstall)) { throw 'Uninstaller missing' }
+          $removed = Start-Process -FilePath $uninstall -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($removed.ExitCode -ne 0) { throw 'Silent uninstall failed' }
+      - name: Generate checksum and signed release manifest
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $minimum = if ($env:LEDGER_MIN_SUPPORTED_VERSION) { $env:LEDGER_MIN_SUPPORTED_VERSION } else { "0.0.0" }
+          python scripts/create_release_manifest.py "installer-output\KCLedger-Setup-$version.exe" --version $version --channel $env:LEDGER_RELEASE_CHANNEL --minimum $minimum --rollout ([int]$env:LEDGER_ROLLOUT_PERCENT)
+          if ($LASTEXITCODE -ne 0) { throw 'Manifest generation failed' }
+      - name: Publish signed and tested GitHub Release assets
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $installer = "installer-output\KCLedger-Setup-$version.exe"
+          $channel = if ($env:LEDGER_RELEASE_CHANNEL -eq 'beta') { @('--prerelease') } else { @() }
+          gh release create "v$version" $installer "$installer.sha256" installer-output\latest.json --title "KC Ledger v$version" --generate-notes @channel
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

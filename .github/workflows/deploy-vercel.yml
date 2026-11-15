@@ -1,0 +1,84 @@
+name: Gated Vercel production deployment
+on:
+  workflow_run:
+    workflows: ["KC Ledger source and package verification"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: kc-ledger-vercel-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && vars.KC_LEDGER_VERCEL_READY == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_CLI_VERSION: ${{ vars.VERCEL_CLI_VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Require reviewed main SHA and configured deployment target
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_CLI_VERSION"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install release tooling
+        run: |
+          npm install --global "vercel@${VERCEL_CLI_VERSION}"
+          python -m pip install -r requirements-prod.lock
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Authenticate to encrypted production backup storage with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.LEDGER_BACKUP_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.LEDGER_BACKUP_AWS_REGION }}
+      - name: Stage production without assigning any live domain
+        id: stage
+        run: |
+          set -euo pipefail
+          vercel pull --yes --environment=production
+          vercel build --prod
+          url="$(vercel deploy --prebuilt --prod --skip-domain)"
+          URL="$url" python -c 'import os,urllib.parse;u=urllib.parse.urlparse(os.environ["URL"]);assert u.scheme=="https" and u.hostname and u.hostname.endswith(".vercel.app")'
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Back up to KMS-encrypted storage and migrate before promotion
+        env:
+          LEDGER_BACKUP_S3_URI: ${{ vars.LEDGER_BACKUP_S3_URI }}
+          LEDGER_BACKUP_KMS_KEY_ID: ${{ vars.LEDGER_BACKUP_KMS_KEY_ID }}
+        run: python scripts/production_migrate.py
+      - name: Validate staged production API and build identity
+        env:
+          DEPLOYMENT_URL: ${{ steps.stage.outputs.url }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: python scripts/smoke_vercel.py
+      - name: Promote validated production deployment
+        env:
+          DEPLOYMENT_URL: ${{ steps.stage.outputs.url }}
+        run: vercel promote "$DEPLOYMENT_URL"
+      - name: Clean up production environment files
+        if: always()
+        run: rm -rf .vercel

@@ -6,14 +6,27 @@ from django.contrib import admin
 from django.urls import path, re_path
 from ledger.api import router
 from ledger.api_extra import router as extra_router
+from ledger.cron_views import daily
 from ledger.security import staff_session_auth
+from ledger.update_manifest_views import latest
+from ledger.update_views import updates
+from ledger.version_views import version
 from ninja import NinjaAPI
 
-api = NinjaAPI(title="KC Ledger API", version="0.1.0", auth=staff_session_auth)
+from config.version import build_info
+
+api = NinjaAPI(title="KC Ledger API", version=build_info()["version"], auth=staff_session_auth)
 api.add_router("/", router)
 api.add_router("/", extra_router)
 
-urlpatterns = [path("api/", api.urls)]
+urlpatterns = [
+    path("api/version", version),
+    path("api/internal/cron/daily", daily),
+    path("api/desktop/updates", updates),
+    path("downloads/latest.json", latest),
+    path("downloads/beta.json", latest, {"channel": "beta"}),
+    path("api/", api.urls),
+]
 if os.environ.get("LEDGER_DESKTOP") == "1":
     from ledger.desktop_views import serve_frontend
 

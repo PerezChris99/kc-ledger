@@ -1,11 +1,10 @@
 {
   "name": "kc-ledger",
   "private": true,
-  "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "dev": "node scripts/build_metadata.mjs && vite --host 0.0.0.0",
+    "build": "node scripts/build_metadata.mjs && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "eslint frontend e2e vite.config.js playwright.config.js --max-warnings=0",
     "verify:source": "node scripts/verify_source.mjs"

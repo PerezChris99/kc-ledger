@@ -27,6 +27,44 @@ def _sqlite_database(environ, base_dir):
 
 
 def _postgres_database(environ):
+    # Managed PostgreSQL URL is the only supported source for serverless.
+    # Connection pooling belongs to the external provider's pooler endpoint.
+    from urllib.parse import unquote, urlsplit
+
+    raw_url = environ.get("DATABASE_URL", "").strip()
+    if raw_url:
+        parsed = urlsplit(raw_url)
+        if parsed.scheme not in {"postgres", "postgresql"} or not parsed.hostname:
+            raise RuntimeError("DATABASE_URL must be a valid PostgreSQL URL.")
+        if environ.get("LEDGER_DEPLOYMENT") == "vercel" and parsed.hostname in {
+            "localhost",
+            "127.0.0.1",
+            "::1",
+            "db",
+        }:
+            raise RuntimeError("Vercel cannot use local PostgreSQL.")
+        if environ.get("LEDGER_DEPLOYMENT") == "vercel" and not parsed.query.count("sslmode="):
+            # Require TLS for a managed, externally reachable database.
+            raise RuntimeError("Serverless DATABASE_URL must set sslmode=require or stronger.")
+        from urllib.parse import parse_qs
+
+        q = parse_qs(parsed.query)
+        return {
+            "ENGINE": POSTGRES,
+            "NAME": unquote(parsed.path.lstrip("/")),
+            "USER": unquote(parsed.username or ""),
+            "PASSWORD": unquote(parsed.password or ""),
+            "HOST": parsed.hostname,
+            "PORT": str(parsed.port or 5432),
+            "CONN_MAX_AGE": 0 if environ.get("LEDGER_DEPLOYMENT") == "vercel" else 60,
+            "CONN_HEALTH_CHECKS": True,
+            "OPTIONS": {
+                "sslmode": q.get("sslmode", ["require"])[0],
+                "connect_timeout": 3,
+                "options": "-c statement_timeout=15000 -c idle_in_transaction_session_timeout=30000",
+                "application_name": "kc_ledger_vercel",
+            },
+        }
     return {
         "ENGINE": POSTGRES,
         "NAME": environ.get("LEDGER_DB_NAME", "kc_ledger"),

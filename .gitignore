@@ -24,3 +24,5 @@ backups/
 
 # Windows package-only Microsoft prerequisite download
 desktop/MicrosoftEdgeWebView2Setup.exe
+
+desktop/update_config.json
