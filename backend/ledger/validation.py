@@ -1,5 +1,7 @@
 """Strict persisted financial precision and currency validation."""
+
 from decimal import Decimal
+
 from ninja.errors import HttpError
 
 

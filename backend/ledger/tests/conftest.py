@@ -1,4 +1,5 @@
 """Reusable Django HTTP fixture for PDF and report integration tests."""
+
 import pytest
 from django.contrib.auth import get_user_model
 

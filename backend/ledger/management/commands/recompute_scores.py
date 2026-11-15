@@ -1,6 +1,8 @@
 from django.core.management.base import BaseCommand
-from ledger.models import Client
+
 from ledger.api import _refresh_score
+from ledger.models import Client
+
 
 class Command(BaseCommand):
     help = "Recompute and persist explainable client health scores for every active client."

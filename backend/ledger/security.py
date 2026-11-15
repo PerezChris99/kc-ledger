@@ -36,11 +36,10 @@ def record_failed_login(key: str) -> None:
         attempts=0, window_started_at=now, locked_until=None
     )
     LoginThrottle.objects.filter(key=key).update(attempts=F("attempts") + 1)
-    LoginThrottle.objects.filter(key=key, attempts__gte=limit).update(
-        locked_until=now + window
-    )
+    LoginThrottle.objects.filter(key=key, attempts__gte=limit).update(locked_until=now + window)
 
 
 def clear_login_throttle(key: str) -> None:
     from ledger.models import LoginThrottle
+
     LoginThrottle.objects.filter(key=key).delete()

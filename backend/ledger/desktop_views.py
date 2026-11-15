@@ -1,8 +1,10 @@
 """Desktop-only static React frontend served from the Windows loopback API."""
+
 import mimetypes
 import os
 import sys
 from pathlib import Path
+
 from django.http import FileResponse, Http404
 
 
@@ -24,13 +26,13 @@ def serve_frontend(request, path=""):
     if not target.is_file():
         raise Http404("Packaged frontend missing.")
     mime, _ = mimetypes.guess_type(str(target))
-    response = FileResponse(
-        target.open("rb"), content_type=mime or "application/octet-stream"
-    )
+    response = FileResponse(target.open("rb"), content_type=mime or "application/octet-stream")
     response["Cache-Control"] = (
-        "no-store" if target.name == "index.html" else
-        "public, max-age=31536000, immutable" if path.startswith("assets/") else
-        "no-cache"
+        "no-store"
+        if target.name == "index.html"
+        else "public, max-age=31536000, immutable"
+        if path.startswith("assets/")
+        else "no-cache"
     )
     response["X-Content-Type-Options"] = "nosniff"
     response["X-Frame-Options"] = "DENY"

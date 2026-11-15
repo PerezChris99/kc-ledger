@@ -1,16 +1,20 @@
 """Portable KC-branded PDF reports (no GTK, Cairo or external executables)."""
+
 from io import BytesIO
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
 )
-
 
 NAVY = colors.HexColor("#0B1B3D")
 CYAN = colors.HexColor("#2CB4E8")
@@ -27,28 +31,58 @@ def styles():
     default = getSampleStyleSheet()
     return {
         "title": ParagraphStyle(
-            "KCTitle", parent=default["Title"], fontName="Helvetica-Bold",
-            fontSize=20, leading=24, textColor=NAVY, alignment=TA_LEFT, spaceAfter=8,
+            "KCTitle",
+            parent=default["Title"],
+            fontName="Helvetica-Bold",
+            fontSize=20,
+            leading=24,
+            textColor=NAVY,
+            alignment=TA_LEFT,
+            spaceAfter=8,
         ),
         "heading": ParagraphStyle(
-            "KCHeading", parent=default["Heading2"], fontName="Helvetica-Bold",
-            fontSize=11, leading=15, textColor=NAVY, spaceBefore=16, spaceAfter=8,
+            "KCHeading",
+            parent=default["Heading2"],
+            fontName="Helvetica-Bold",
+            fontSize=11,
+            leading=15,
+            textColor=NAVY,
+            spaceBefore=16,
+            spaceAfter=8,
         ),
         "body": ParagraphStyle(
-            "KCBody", parent=default["BodyText"], fontName="Helvetica",
-            fontSize=9, leading=13, textColor=NAVY, spaceAfter=5,
+            "KCBody",
+            parent=default["BodyText"],
+            fontName="Helvetica",
+            fontSize=9,
+            leading=13,
+            textColor=NAVY,
+            spaceAfter=5,
         ),
         "muted": ParagraphStyle(
-            "KCMuted", parent=default["BodyText"], fontName="Helvetica",
-            fontSize=8, leading=12, textColor=MUTED, spaceAfter=5,
+            "KCMuted",
+            parent=default["BodyText"],
+            fontName="Helvetica",
+            fontSize=8,
+            leading=12,
+            textColor=MUTED,
+            spaceAfter=5,
         ),
         "cell": ParagraphStyle(
-            "KCCell", parent=default["BodyText"], fontSize=8, leading=11,
-            textColor=NAVY, wordWrap="CJK",
+            "KCCell",
+            parent=default["BodyText"],
+            fontSize=8,
+            leading=11,
+            textColor=NAVY,
+            wordWrap="CJK",
         ),
         "tablehead": ParagraphStyle(
-            "KCHead", parent=default["BodyText"], fontName="Helvetica-Bold",
-            fontSize=8, leading=10, textColor=colors.white,
+            "KCHead",
+            parent=default["BodyText"],
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=10,
+            textColor=colors.white,
         ),
     }
 
@@ -63,16 +97,20 @@ def table(headers, rows, sheet, widths=None):
     head = [paragraph(v, sheet["tablehead"]) for v in headers]
     body = [[paragraph(v, sheet["cell"]) for v in row] for row in rows]
     result = Table([head, *body], colWidths=widths, repeatRows=1, hAlign="LEFT")
-    result.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-        ("GRID", (0, 0), (-1, -1), 0.4, BORDER),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F9FA")]),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-    ]))
+    result.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+                ("GRID", (0, 0), (-1, -1), 0.4, BORDER),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F9FA")]),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ]
+        )
+    )
     return [result]
 
 
@@ -97,9 +135,14 @@ def _page(canvas, document):
 def build(title, story):
     buffer = BytesIO()
     document = SimpleDocTemplate(
-        buffer, pagesize=A4, title=title, author="KC Ledger",
-        topMargin=27 * mm, bottomMargin=22 * mm,
-        leftMargin=20 * mm, rightMargin=20 * mm,
+        buffer,
+        pagesize=A4,
+        title=title,
+        author="KC Ledger",
+        topMargin=27 * mm,
+        bottomMargin=22 * mm,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
     )
     document.build(story, onFirstPage=_page, onLaterPages=_page)
     data = buffer.getvalue()
@@ -118,27 +161,46 @@ def invoice_pdf(invoice, payments, instalments, paid, outstanding):
         Spacer(1, 10),
         *table(
             ["Billed", "Collected", "Outstanding"],
-            [[f"{invoice.amount:.2f} {invoice.currency}",
-              f"{paid:.2f} {invoice.currency}", f"{outstanding:.2f} {invoice.currency}"]],
-            sheet, [155, 155, 155],
+            [
+                [
+                    f"{invoice.amount:.2f} {invoice.currency}",
+                    f"{paid:.2f} {invoice.currency}",
+                    f"{outstanding:.2f} {invoice.currency}",
+                ]
+            ],
+            sheet,
+            [155, 155, 155],
         ),
         Paragraph("Recorded payments", sheet["heading"]),
         *table(
             ["Date", "Amount", "Method", "Reference"],
-            [[p.paid_on, f"{p.amount:.2f} {invoice.currency}", p.method or "—",
-              p.reference or "—"] for p in payments],
-            sheet, [100, 130, 110, 125],
+            [
+                [
+                    p.paid_on,
+                    f"{p.amount:.2f} {invoice.currency}",
+                    p.method or "—",
+                    p.reference or "—",
+                ]
+                for p in payments
+            ],
+            sheet,
+            [100, 130, 110, 125],
         ),
         Paragraph("Instalment schedule", sheet["heading"]),
         *table(
             ["Due date", "Description", "Amount", "State"],
-            [[i.due_date, i.label, f"{i.amount:.2f} {invoice.currency}", i.status]
-             for i in instalments],
-            sheet, [95, 180, 105, 85],
+            [
+                [i.due_date, i.label, f"{i.amount:.2f} {invoice.currency}", i.status]
+                for i in instalments
+            ],
+            sheet,
+            [95, 180, 105, 85],
         ),
     ]
     if invoice.notes:
-        story.extend([Paragraph("Notes", sheet["heading"]), paragraph(invoice.notes, sheet["body"])])
+        story.extend(
+            [Paragraph("Notes", sheet["heading"]), paragraph(invoice.notes, sheet["body"])]
+        )
     return build(f"KC Ledger - invoice {invoice.number}", story)
 
 
@@ -152,22 +214,35 @@ def client_dossier_pdf(client, score, invoices, events, base_currency, collected
         Paragraph("Health score breakdown", sheet["heading"]),
         *table(
             ["Factor", "Points", "Assessment"],
-            [[f.get("label"), f"{f.get('points')}/{f.get('maximum')}", f.get("detail")]
-             for f in score.get("factors", [])],
-            sheet, [115, 65, 285],
+            [
+                [f.get("label"), f"{f.get('points')}/{f.get('maximum')}", f.get("detail")]
+                for f in score.get("factors", [])
+            ],
+            sheet,
+            [115, 65, 285],
         ),
         Paragraph("Invoices", sheet["heading"]),
         *table(
             ["Invoice", "Due", "Amount", "Outstanding", "Status"],
-            [[i["number"], i["due_date"], f"{i['amount']:.2f} {i['currency']}",
-              f"{i['outstanding']:.2f}", i["status"]] for i in invoices],
-            sheet, [100, 75, 110, 105, 75],
+            [
+                [
+                    i["number"],
+                    i["due_date"],
+                    f"{i['amount']:.2f} {i['currency']}",
+                    f"{i['outstanding']:.2f}",
+                    i["status"],
+                ]
+                for i in invoices
+            ],
+            sheet,
+            [100, 75, 110, 105, 75],
         ),
         Paragraph("Audit timeline (latest 250)", sheet["heading"]),
         *table(
             ["Date", "Event", "Details"],
             [[e.occurred_at.strftime("%Y-%m-%d"), e.title, e.detail] for e in events],
-            sheet, [70, 165, 230],
+            sheet,
+            [70, 165, 230],
         ),
     ]
     return build(f"KC Ledger - client dossier {client.name}", story)

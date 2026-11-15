@@ -1,4 +1,5 @@
 from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
@@ -7,6 +8,7 @@ from django.db.models import Q
 class LiveQuerySet(models.QuerySet):
     def delete(self):
         from django.utils import timezone
+
         count = self.update(deleted_at=timezone.now(), updated_at=timezone.now())
         return count, {self.model._meta.label: count}
 
@@ -31,6 +33,7 @@ class SoftDeleteModel(models.Model):
 
     def soft_delete(self):
         from django.utils import timezone
+
         self.deleted_at = timezone.now()
         self.save(update_fields=["deleted_at", "updated_at"])
 
@@ -52,7 +55,9 @@ class Client(SoftDeleteModel):
     phone = models.CharField(max_length=40, blank=True)
     country = models.CharField(max_length=100, blank=True)
     currency = models.CharField(max_length=3, default="USD")
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.ACTIVE, db_index=True
+    )
     source = models.CharField(max_length=120, blank=True)
     referred_by = models.CharField(max_length=160, blank=True)
     rate = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
@@ -64,8 +69,15 @@ class Client(SoftDeleteModel):
 
     class Meta:
         ordering = ["name"]
-        indexes = [models.Index(fields=["status", "name"], name="client_status_name_idx"), models.Index(fields=["score", "status"], name="client_score_status_idx")]
-        constraints = [models.CheckConstraint(condition=Q(score__gte=0, score__lte=100), name="client_score_0_100")]
+        indexes = [
+            models.Index(fields=["status", "name"], name="client_status_name_idx"),
+            models.Index(fields=["score", "status"], name="client_score_status_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(score__gte=0, score__lte=100), name="client_score_0_100"
+            )
+        ]
 
     def __str__(self):
         return self.name
@@ -87,12 +99,14 @@ class Engagement(SoftDeleteModel):
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="engagements")
     name = models.CharField(max_length=180)
     kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.FIXED)
-    agreed_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    agreed_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal(0))
     rate = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=3, default="USD")
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.ACTIVE, db_index=True
+    )
     scope_notes = models.TextField(blank=True)
     sow_deliverables = models.JSONField(default=list, blank=True)
     revision_limit = models.PositiveIntegerField(default=0)
@@ -118,28 +132,39 @@ class Invoice(SoftDeleteModel):
         DISPUTED = "disputed", "Disputed"
 
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="invoices")
-    engagement = models.ForeignKey(Engagement, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices")
+    engagement = models.ForeignKey(
+        Engagement, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices"
+    )
     number = models.CharField(max_length=40, unique=True)
     title = models.CharField(max_length=200)
     issue_date = models.DateField()
     due_date = models.DateField(db_index=True)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     currency = models.CharField(max_length=3, default="USD")
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.DRAFT, db_index=True
+    )
     paid_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["-issue_date", "-id"]
-        indexes = [models.Index(fields=["client", "status"], name="invoice_client_status_idx"), models.Index(fields=["status", "due_date"], name="invoice_status_due_idx")]
-        constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name="invoice_amount_positive")]
+        indexes = [
+            models.Index(fields=["client", "status"], name="invoice_client_status_idx"),
+            models.Index(fields=["status", "due_date"], name="invoice_status_due_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=Q(amount__gt=0), name="invoice_amount_positive")
+        ]
 
     def __str__(self):
         return self.number
 
 
 class PlanMeta(SoftDeleteModel):
-    invoice = models.OneToOneField(Invoice, primary_key=True, on_delete=models.CASCADE, related_name="plan_meta")
+    invoice = models.OneToOneField(
+        Invoice, primary_key=True, on_delete=models.CASCADE, related_name="plan_meta"
+    )
     plan_deadline = models.DateField(null=True, blank=True)
     last_verdict = models.CharField(max_length=16, blank=True)
     notes = models.TextField(blank=True)
@@ -161,13 +186,19 @@ class Instalment(SoftDeleteModel):
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     due_date = models.DateField(db_index=True)
     grace_days = models.PositiveSmallIntegerField(default=0)
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
     paid_on = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["seq"]
         constraints = [
-            models.UniqueConstraint(fields=["invoice", "seq"], condition=Q(deleted_at__isnull=True), name="unique_live_instalment_seq"),
+            models.UniqueConstraint(
+                fields=["invoice", "seq"],
+                condition=Q(deleted_at__isnull=True),
+                name="unique_live_instalment_seq",
+            ),
             models.CheckConstraint(condition=Q(amount__gt=0), name="instalment_amount_positive"),
         ]
         indexes = [models.Index(fields=["status", "due_date"], name="instalment_status_due_idx")]
@@ -187,7 +218,9 @@ class Payment(SoftDeleteModel):
 
     class Meta:
         ordering = ["-paid_on", "-id"]
-        constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name="payment_amount_positive")]
+        constraints = [
+            models.CheckConstraint(condition=Q(amount__gt=0), name="payment_amount_positive")
+        ]
         indexes = [models.Index(fields=["client", "paid_on"], name="payment_client_paid_idx")]
 
     def __str__(self):
@@ -202,14 +235,20 @@ class PaymentAllocation(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["payment", "instalment"], name="unique_payment_instalment_allocation"),
+            models.UniqueConstraint(
+                fields=["payment", "instalment"], name="unique_payment_instalment_allocation"
+            ),
             models.CheckConstraint(condition=Q(amount__gt=0), name="allocation_amount_positive"),
         ]
 
 
 class Expense(SoftDeleteModel):
-    client = models.ForeignKey(Client, null=True, blank=True, on_delete=models.SET_NULL, related_name="expenses")
-    engagement = models.ForeignKey(Engagement, null=True, blank=True, on_delete=models.SET_NULL, related_name="expenses")
+    client = models.ForeignKey(
+        Client, null=True, blank=True, on_delete=models.SET_NULL, related_name="expenses"
+    )
+    engagement = models.ForeignKey(
+        Engagement, null=True, blank=True, on_delete=models.SET_NULL, related_name="expenses"
+    )
     category = models.CharField(max_length=80)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     currency = models.CharField(max_length=3, default="USD")
@@ -219,7 +258,9 @@ class Expense(SoftDeleteModel):
 
     class Meta:
         ordering = ["-spent_on"]
-        constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name="expense_amount_positive")]
+        constraints = [
+            models.CheckConstraint(condition=Q(amount__gt=0), name="expense_amount_positive")
+        ]
 
 
 class ImmutableEventQuerySet(models.QuerySet):
@@ -244,14 +285,22 @@ class Event(models.Model):
         DELIVERY = "delivery", "Delivery"
         RELATIONSHIP = "relationship", "Relationship"
 
-    client = models.ForeignKey(Client, null=True, blank=True, on_delete=models.PROTECT, related_name="events")
-    engagement = models.ForeignKey(Engagement, null=True, blank=True, on_delete=models.PROTECT, related_name="events")
-    invoice = models.ForeignKey(Invoice, null=True, blank=True, on_delete=models.PROTECT, related_name="events")
-    payment = models.ForeignKey(Payment, null=True, blank=True, on_delete=models.PROTECT, related_name="events")
+    client = models.ForeignKey(
+        Client, null=True, blank=True, on_delete=models.PROTECT, related_name="events"
+    )
+    engagement = models.ForeignKey(
+        Engagement, null=True, blank=True, on_delete=models.PROTECT, related_name="events"
+    )
+    invoice = models.ForeignKey(
+        Invoice, null=True, blank=True, on_delete=models.PROTECT, related_name="events"
+    )
+    payment = models.ForeignKey(
+        Payment, null=True, blank=True, on_delete=models.PROTECT, related_name="events"
+    )
     kind = models.CharField(max_length=80, db_index=True)
     category = models.CharField(max_length=16, choices=Category.choices)
     polarity = models.SmallIntegerField(default=0)
-    weight = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal("1"))
+    weight = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal(1))
     title = models.CharField(max_length=200)
     detail = models.TextField(blank=True)
     amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
@@ -261,8 +310,15 @@ class Event(models.Model):
 
     class Meta:
         ordering = ["-occurred_at", "-id"]
-        indexes = [models.Index(fields=["client", "occurred_at"], name="event_client_occurred_idx"), models.Index(fields=["category", "occurred_at"], name="event_category_occurred_idx")]
-        constraints = [models.CheckConstraint(condition=Q(polarity__gte=-1, polarity__lte=1), name="event_polarity_range")]
+        indexes = [
+            models.Index(fields=["client", "occurred_at"], name="event_client_occurred_idx"),
+            models.Index(fields=["category", "occurred_at"], name="event_category_occurred_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(polarity__gte=-1, polarity__lte=1), name="event_polarity_range"
+            )
+        ]
 
     def save(self, *args, **kwargs):
         if self.pk and Event.objects.filter(pk=self.pk).exists():
@@ -278,7 +334,7 @@ class SignalType(models.Model):
     label = models.CharField(max_length=120)
     category = models.CharField(max_length=16, choices=Event.Category.choices)
     polarity = models.SmallIntegerField(default=0)
-    weight = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal("1"))
+    weight = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal(1))
     icon = models.CharField(max_length=80, blank=True)
 
 
@@ -289,7 +345,9 @@ class TimeEntry(SoftDeleteModel):
         ADMIN = "admin", "Admin"
         MEETING = "meeting", "Meeting"
 
-    engagement = models.ForeignKey(Engagement, on_delete=models.PROTECT, related_name="time_entries")
+    engagement = models.ForeignKey(
+        Engagement, on_delete=models.PROTECT, related_name="time_entries"
+    )
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="time_entries")
     hours = models.DecimalField(max_digits=8, decimal_places=2)
     category = models.CharField(max_length=16, choices=Category.choices)
@@ -297,7 +355,9 @@ class TimeEntry(SoftDeleteModel):
     note = models.TextField(blank=True)
 
     class Meta:
-        constraints = [models.CheckConstraint(condition=Q(hours__gt=0), name="time_entry_hours_positive")]
+        constraints = [
+            models.CheckConstraint(condition=Q(hours__gt=0), name="time_entry_hours_positive")
+        ]
 
 
 class Target(SoftDeleteModel):
@@ -335,6 +395,7 @@ class Meta(models.Model):
 
 class LoginThrottle(models.Model):
     """Persistent per-source-and-username login attempt counter."""
+
     key = models.CharField(max_length=64, primary_key=True)
     attempts = models.PositiveIntegerField(default=0)
     window_started_at = models.DateTimeField()

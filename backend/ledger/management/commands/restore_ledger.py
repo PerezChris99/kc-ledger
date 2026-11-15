@@ -1,4 +1,5 @@
 """Offline SQLite restore with verification and a pre-restore safety snapshot."""
+
 import os
 import sqlite3
 import tempfile
@@ -16,10 +17,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("backup", type=Path, help="Verified .sqlite3 snapshot")
-        parser.add_argument("--apply", action="store_true", help="Apply the restore (default dry-run)")
         parser.add_argument(
-            "--confirm", default="", help="Must equal RESTORE-LEDGER to apply"
+            "--apply", action="store_true", help="Apply the restore (default dry-run)"
         )
+        parser.add_argument("--confirm", default="", help="Must equal RESTORE-LEDGER to apply")
 
     def handle(self, *args, **options):
         if connection.vendor != "sqlite":
@@ -52,8 +53,9 @@ class Command(BaseCommand):
             backup_dir = database.parent / "backups"
             backup_dir.mkdir(parents=True, exist_ok=True)
             safety = write_backup(
-                backup_dir / ("pre-restore-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-                              + ".sqlite3"), live,
+                backup_dir
+                / ("pre-restore-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".sqlite3"),
+                live,
             )
             with connection.cursor() as cursor:
                 busy, *_ = cursor.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
@@ -80,10 +82,14 @@ class Command(BaseCommand):
         except Exception as exc:
             if safety and safety.exists():
                 os.replace(safety, database)
-            raise CommandError(f"Restore failed; previous state preserved if possible: {exc}") from exc
+            raise CommandError(
+                f"Restore failed; previous state preserved if possible: {exc}"
+            ) from exc
         finally:
             staged.unlink(missing_ok=True)
-        self.stdout.write(self.style.SUCCESS(
-            f"Restored and verified: {database}."
-            + (f" Safety backup retained at {safety}." if safety else "")
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Restored and verified: {database}."
+                + (f" Safety backup retained at {safety}." if safety else "")
+            )
+        )

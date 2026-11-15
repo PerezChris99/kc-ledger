@@ -1,4 +1,5 @@
 """Verified atomic SQLite backups with configurable retention and secondary copy."""
+
 import os
 import shutil
 import sqlite3
@@ -68,10 +69,15 @@ class Command(BaseCommand):
         if options["keep"] < 1 or options["keep"] > 1000:
             raise CommandError("--keep must be between 1 and 1000.")
         database = Path(connection.settings_dict["NAME"])
-        backup_dir = Path(
-            options["directory"] or os.environ.get("LEDGER_BACKUP_DIR")
-            or database.parent / "backups"
-        ).expanduser().resolve()
+        backup_dir = (
+            Path(
+                options["directory"]
+                or os.environ.get("LEDGER_BACKUP_DIR")
+                or database.parent / "backups"
+            )
+            .expanduser()
+            .resolve()
+        )
         connection.ensure_connection()
         source = connection.connection
         if source is None:
@@ -85,9 +91,10 @@ class Command(BaseCommand):
                 raise CommandError("Secondary backup location must differ from primary.")
             copy_secondary(destination, secondary_path)
         backups = sorted(
-            backup_dir.glob("ledger-*.sqlite3"), key=lambda p: p.stat().st_mtime,
+            backup_dir.glob("ledger-*.sqlite3"),
+            key=lambda p: p.stat().st_mtime,
             reverse=True,
         )
-        for old in backups[options["keep"]:]:
+        for old in backups[options["keep"] :]:
             old.unlink(missing_ok=True)
         self.stdout.write(self.style.SUCCESS(f"Backup verified: {destination}"))
