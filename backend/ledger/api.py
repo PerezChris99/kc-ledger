@@ -360,6 +360,7 @@ def list_clients(request, q: str = "", status: str = "", limit: int = 50, offset
 
 
 @router.post("/clients")
+@transaction.atomic
 def create_client(request, payload: ClientIn):
     if payload.status not in Client.Status.values:
         raise HttpError(422, "Unsupported client status.")
@@ -484,6 +485,7 @@ def client_detail(request, client_id: int):
 
 
 @router.patch("/clients/{client_id}")
+@transaction.atomic
 def update_client(request, client_id: int, payload: ClientPatch):
     try:
         client = Client.objects.get(pk=client_id)
@@ -530,6 +532,7 @@ def update_client(request, client_id: int, payload: ClientPatch):
 
 
 @router.delete("/clients/{client_id}")
+@transaction.atomic
 def archive_client(request, client_id: int):
     try:
         client = Client.objects.get(pk=client_id)
@@ -593,6 +596,7 @@ def list_invoices(request, status: str = "", q: str = "", limit: int = 50, offse
 
 
 @router.post("/invoices")
+@transaction.atomic
 def create_invoice(request, payload: InvoiceIn):
     amount_cents(payload.amount, "Invoice amount")
     if payload.due_date < payload.issue_date:
@@ -638,8 +642,8 @@ def create_invoice(request, payload: InvoiceIn):
     return {"id": inv.id, "number": inv.number, "status": inv.status}
 
 
-@transaction.atomic
 @router.patch("/invoices/{invoice_id}")
+@transaction.atomic
 def update_invoice(request, invoice_id: int, payload: InvoicePatch):
     try:
         invoice = Invoice.objects.select_related("client").get(pk=invoice_id)
@@ -719,6 +723,7 @@ def update_invoice(request, invoice_id: int, payload: InvoicePatch):
 
 
 @router.post("/payments")
+@transaction.atomic
 def record_payment(request, payload: PaymentIn):
     amount_cents(payload.amount, "Payment amount")
     if payload.paid_on > timezone.localdate():
@@ -915,11 +920,16 @@ def list_engagements(request, client_id: int | None = None, status: str = "", li
 
 
 @router.post("/engagements")
+@transaction.atomic
 def create_engagement(request, payload: EngagementIn):
     if payload.kind not in Engagement.Kind.values or payload.status not in Engagement.Status.values:
         raise HttpError(422, "Unsupported engagement kind or status.")
     if payload.agreed_amount < 0 or (payload.rate is not None and payload.rate < 0):
         raise HttpError(422, "Engagement amounts and rates cannot be negative.")
+    if payload.agreed_amount != payload.agreed_amount.quantize(Decimal("0.01")) or (
+        payload.rate is not None and payload.rate != payload.rate.quantize(Decimal("0.01"))
+    ):
+        raise HttpError(422, "Engagement amounts and rates support at most two decimal places.")
     if payload.start_date and payload.end_date and payload.end_date < payload.start_date:
         raise HttpError(422, "Engagement end date cannot precede its start date.")
     if payload.recurring_interval_days < 0 or payload.recurring_interval_days > 365:
@@ -954,6 +964,7 @@ def create_engagement(request, payload: EngagementIn):
 
 
 @router.patch("/engagements/{engagement_id}")
+@transaction.atomic
 def update_engagement(request, engagement_id: int, payload: EngagementPatch):
     try:
         engagement = Engagement.objects.select_related("client").get(pk=engagement_id)
@@ -970,14 +981,22 @@ def update_engagement(request, engagement_id: int, payload: EngagementPatch):
         raise HttpError(422, "Unsupported engagement status.")
     if "agreed_amount" in changes and changes["agreed_amount"] < 0:
         raise HttpError(422, "Agreed amount cannot be negative.")
+    if "agreed_amount" in changes and changes["agreed_amount"] != changes["agreed_amount"].quantize(Decimal("0.01")):
+        raise HttpError(422, "Agreed amount supports at most two decimal places.")
     if "rate" in changes and changes["rate"] is not None and changes["rate"] < 0:
         raise HttpError(422, "Rate cannot be negative.")
+    if "rate" in changes and changes["rate"] is not None and changes["rate"] != changes["rate"].quantize(Decimal("0.01")):
+        raise HttpError(422, "Rate supports at most two decimal places.")
+    if "end_date" in changes and engagement.start_date and changes["end_date"] < engagement.start_date:
+        raise HttpError(422, "Engagement end date cannot precede its start date.")
     if "currency" in changes:
         changes["currency"] = changes["currency"].upper()
         if len(changes["currency"]) != 3 or not changes["currency"].isalpha():
             raise HttpError(422, "Currency must be a three-letter code.")
     next_kind = changes.get("kind", engagement.kind)
     next_interval = changes.get("recurring_interval_days", engagement.recurring_interval_days)
+    if next_interval < 0 or next_interval > 365:
+        raise HttpError(422, "Recurring interval must be between 0 and 365 days.")
     next_date = changes.get("next_invoice_date", engagement.next_invoice_date)
     if next_interval and (next_kind != Engagement.Kind.RETAINER or not next_date):
         raise HttpError(
@@ -1024,6 +1043,7 @@ def list_time_entries(request, client_id: int | None = None, limit: int = 100):
 
 
 @router.post("/time-entries")
+@transaction.atomic
 def create_time_entry(request, payload: TimeEntryIn):
     if payload.hours <= 0 or payload.hours != payload.hours.quantize(Decimal("0.01")):
         raise HttpError(422, "Hours must be positive with at most two decimal places.")
@@ -1084,6 +1104,7 @@ def list_expenses(request, client_id: int | None = None, limit: int = 100):
 
 
 @router.post("/expenses")
+@transaction.atomic
 def create_expense(request, payload: ExpenseIn):
     amount_cents(payload.amount, "Expense amount")
     if not payload.category.strip():
@@ -1305,6 +1326,7 @@ def dashboard(request):
 
 
 @router.put("/time-entries/{entry_id}")
+@transaction.atomic
 def replace_time_entry(request, entry_id: int, payload: TimeEntryIn):
     if payload.hours <= 0 or payload.hours != payload.hours.quantize(Decimal("0.01")):
         raise HttpError(422, "Hours must be positive with at most two decimal places.")
@@ -1349,6 +1371,7 @@ def replace_time_entry(request, entry_id: int, payload: TimeEntryIn):
 
 
 @router.delete("/time-entries/{entry_id}")
+@transaction.atomic
 def archive_time_entry(request, entry_id: int):
     with transaction.atomic():
         entry = TimeEntry.objects.select_for_update().filter(pk=entry_id).first()
@@ -1370,6 +1393,7 @@ def archive_time_entry(request, entry_id: int):
 
 
 @router.put("/expenses/{expense_id}")
+@transaction.atomic
 def replace_expense(request, expense_id: int, payload: ExpenseIn):
     amount_cents(payload.amount, "Expense amount")
     if not payload.category.strip() or len(payload.category.strip()) > 80:
@@ -1424,6 +1448,7 @@ def replace_expense(request, expense_id: int, payload: ExpenseIn):
 
 
 @router.delete("/expenses/{expense_id}")
+@transaction.atomic
 def archive_expense(request, expense_id: int):
     with transaction.atomic():
         expense = Expense.objects.select_for_update().filter(pk=expense_id).first()
@@ -1447,6 +1472,7 @@ def archive_expense(request, expense_id: int):
 
 
 @router.delete("/engagements/{engagement_id}")
+@transaction.atomic
 def archive_engagement(request, engagement_id: int):
     with transaction.atomic():
         engagement = Engagement.objects.select_for_update().filter(pk=engagement_id).first()
@@ -1499,6 +1525,7 @@ def list_archived_records(request, limit: int = 100):
 
 
 @router.post("/archived-records/{kind}/{record_id}/restore")
+@transaction.atomic
 def restore_archived_record(request, kind: str, record_id: int):
     models = {"engagement": Engagement, "time-entry": TimeEntry, "expense": Expense}
     model = models.get(kind)

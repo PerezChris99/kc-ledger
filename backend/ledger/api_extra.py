@@ -325,6 +325,7 @@ def list_targets(request):
 
 
 @router.post("/targets")
+@transaction.atomic
 def create_target(request, payload: TargetIn):
     amount_cents(payload.amount, "Target amount")
     if payload.type not in {"revenue", "clients", "hours"}:
@@ -346,6 +347,7 @@ def create_target(request, payload: TargetIn):
 
 
 @router.patch("/targets/{target_id}")
+@transaction.atomic
 def update_target(request, target_id: int, payload: TargetIn):
     amount_cents(payload.amount, "Target amount")
     if payload.type not in {"revenue", "clients", "hours"}:
@@ -376,6 +378,7 @@ def update_target(request, target_id: int, payload: TargetIn):
 
 
 @router.delete("/targets/{target_id}")
+@transaction.atomic
 def archive_target(request, target_id: int):
     with transaction.atomic():
         target = Target.objects.select_for_update().filter(pk=target_id).first()
@@ -427,6 +430,7 @@ def convert_fx(request, amount: Decimal, base: str, quote: str):
 
 
 @router.post("/fx/rates")
+@transaction.atomic
 def upsert_fx_rate(request, payload: FxRateIn):
     base, quote = payload.base.upper(), payload.quote.upper()
     if len(base) != 3 or len(quote) != 3 or base == quote or payload.rate <= 0:
@@ -604,6 +608,7 @@ def list_plans(request):
 
 
 @router.post("/plans")
+@transaction.atomic
 def create_plan(request, payload: PlanIn):
     if not payload.instalments:
         raise HttpError(422, "A plan must contain at least one instalment.")
@@ -737,6 +742,7 @@ def read_settings(request):
 
 
 @router.patch("/settings")
+@transaction.atomic
 def update_settings(request, payload: SettingsIn):
     import json
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -881,6 +887,7 @@ def export_invoice_pdf(request, invoice_id: int):
 
 
 @router.patch("/plans/{invoice_id}")
+@transaction.atomic
 def update_plan(request, invoice_id: int, payload: PlanIn):
     if payload.invoice_id != invoice_id:
         raise HttpError(422, "Invoice ID in the request does not match the plan URL.")
