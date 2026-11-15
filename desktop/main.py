@@ -1,4 +1,4 @@
-"""One-process Windows KC Ledger: Django, SQLite, Waitress, WebView2."""
+"""One-process Windows KC Ledger: Django, PostgreSQL/SQLite, Waitress, WebView2."""
 import ctypes
 import logging
 import os
@@ -114,11 +114,16 @@ def run():
             "DJANGO_DEBUG": "0",
             "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost",
             "LEDGER_DB_PATH": str(data / "ledger.sqlite3"),
+            "LEDGER_DB_PIN_PATH": str(data / ".database-backend"),
             "LEDGER_BACKUP_DIR": str(data / "backups"),
             "LEDGER_DESKTOP": "1",
             "COOKIE_SECURE": "0",
             "RUN_SCHEDULER": "0",
         })
+        # Desktop auto-selects local PostgreSQL on first use, but never switches
+        # a pinned financial database during outages or after recovery.
+        os.environ.setdefault("LEDGER_DB_ENGINE", "auto")
+        os.environ.setdefault("LEDGER_ALLOW_SQLITE_FALLBACK", "1")
         import django
         django.setup()
         from django.core.management import call_command
@@ -127,7 +132,16 @@ def run():
         from waitress import create_server
         import webview
 
-        if (data / "ledger.sqlite3").is_file():
+        from django.db import connection
+
+        # Protect existing financial data before applying any schema upgrade.
+        if connection.vendor == "postgresql":
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT to_regclass('public.django_migrations')")
+                has_existing_schema = cursor.fetchone()[0] is not None
+            if has_existing_schema:
+                call_command("backup_ledger", verbosity=0)
+        elif (data / "ledger.sqlite3").is_file():
             call_command("backup_ledger", verbosity=0)
         call_command("migrate", interactive=False, verbosity=0)
         first_owner()
@@ -192,6 +206,7 @@ def self_test() -> None:
                 "DJANGO_SECRET_KEY": secrets.token_urlsafe(64),
                 "DJANGO_DEBUG": "0",
                 "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost,testserver",
+                "LEDGER_DB_ENGINE": "sqlite",
                 "LEDGER_DB_PATH": str(Path(folder) / "smoke.sqlite3"),
                 "LEDGER_DESKTOP": "1",
                 "RUN_SCHEDULER": "0",
