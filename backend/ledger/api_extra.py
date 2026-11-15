@@ -206,7 +206,7 @@ def update_target(request, target_id: int, payload: TargetIn):
     amount_cents(payload.amount, "Target amount")
     if payload.type not in {"revenue", "clients", "hours"}:
         raise HttpError(422, "Target type is invalid.")
-    currency = payload.currency.upper()
+    currency = currency_code(payload.currency)
     if len(currency) != 3 or not currency.isalpha():
         raise HttpError(422, "Currency must be a three-letter code.")
     with transaction.atomic():
