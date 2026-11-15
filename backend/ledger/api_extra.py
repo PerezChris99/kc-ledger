@@ -210,6 +210,11 @@ def insights(request):
             "agreed_amount": str(row.agreed_amount),
             "currency": row.currency,
             "status": row.status,
+            "rate": str(row.rate) if row.rate is not None else None,
+            "start_date": row.start_date.isoformat() if row.start_date else None,
+            "end_date": row.end_date.isoformat() if row.end_date else None,
+            "scope_notes": row.scope_notes,
+            "revision_limit": row.revision_limit,
             "recurring_interval_days": row.recurring_interval_days,
             "next_invoice_date": row.next_invoice_date.isoformat()
             if row.next_invoice_date

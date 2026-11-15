@@ -106,6 +106,7 @@ class EngagementIn(Schema):
 
 class EngagementPatch(Schema):
     name: str | None = None
+    kind: str | None = None
     status: str | None = None
     agreed_amount: Decimal | None = None
     rate: Decimal | None = None
@@ -963,6 +964,8 @@ def update_engagement(request, engagement_id: int, payload: EngagementPatch):
     }
     if not changes:
         raise HttpError(422, "Provide at least one field to update.")
+    if "kind" in changes and changes["kind"] not in Engagement.Kind.values:
+        raise HttpError(422, "Unsupported engagement kind.")
     if "status" in changes and changes["status"] not in Engagement.Status.values:
         raise HttpError(422, "Unsupported engagement status.")
     if "agreed_amount" in changes and changes["agreed_amount"] < 0:
