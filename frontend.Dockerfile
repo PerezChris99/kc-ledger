@@ -5,6 +5,8 @@ RUN npm ci
 COPY index.html vite.config.js VERSION ./
 COPY scripts/ ./scripts/
 COPY frontend/ ./frontend/
+ARG LEDGER_GIT_SHA=unknown
+ENV GITHUB_SHA=$LEDGER_GIT_SHA
 RUN npm run build
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
