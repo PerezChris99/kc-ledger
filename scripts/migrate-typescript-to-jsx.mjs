@@ -70,9 +70,6 @@ update("frontend.Dockerfile", s => s
 update("desktop/build_windows.ps1", s => s
   .replace("npm run typecheck", "npm run lint")
   .replace("Frontend type checking failed", "Frontend lint failed"));
-update(".github/workflows/ci.yml", s => s
-  .replace("Lint, typecheck, bundle", "Lint and production bundle")
-  .replace("          npm run typecheck\n", ""));
 update("README.md", s => s
   .replaceAll("TypeScript", "JavaScript (JSX)")
   .replaceAll("npm run typecheck\n", ""));
@@ -117,7 +114,6 @@ const lintConfig = [
 ].join("\n");
 fs.writeFileSync(absolute("eslint.config.js"), lintConfig, "utf8");
 fs.unlinkSync(absolute("scripts/migrate-typescript-to-jsx.mjs"));
-fs.unlinkSync(absolute(".github/workflows/javascript-migration.yml"));
 if (migrated.length < 12) throw new Error("Unexpectedly small TypeScript migration: " + migrated.length);
 console.log("Converted " + migrated.length + " source/config/test files to JS/JSX:");
 for (const item of migrated) console.log("  " + item.from + " -> " + item.to);
