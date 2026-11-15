@@ -4,6 +4,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.db import transaction, IntegrityError
 from django.db.models import Sum
 from django.middleware.csrf import get_token
+from django.views.decorators.csrf import csrf_protect
 from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
@@ -204,6 +205,7 @@ def csrf_token(request):
     return {"csrfToken": get_token(request)}
 
 @router.post("/auth/login", auth=None)
+@csrf_protect
 def auth_login(request, payload: LoginIn):
     from ledger.security import (
         clear_login_throttle, is_login_blocked, record_failed_login, throttle_key,

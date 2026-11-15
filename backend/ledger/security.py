@@ -1,12 +1,8 @@
-class StaffSessionAuth:
-    """Require an authenticated staff account for every private API route."""
-    def __call__(self, request):
-        user = getattr(request, "user", None)
-        if user is not None and user.is_authenticated and user.is_active and user.is_staff:
-            return user
-        return None
+from ninja.security import django_auth_is_staff
 
-staff_session_auth = StaffSessionAuth()
+# Django Ninja's cookie-backed staff session auth enforces CSRF for mutations.
+# A plain callable auth class would inadvertently bypass CSRF in Ninja 1.8.
+staff_session_auth = django_auth_is_staff
 
 
 from datetime import timedelta
