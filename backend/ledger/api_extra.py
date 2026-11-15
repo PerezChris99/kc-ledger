@@ -24,6 +24,7 @@ from ledger.models import (
     TimeEntry,
 )
 from ledger.services.instalments import evaluate_plan_verdict
+from ledger.services.fx import conversion_for
 from ledger.validation import amount_cents, currency_code
 
 router = Router()
@@ -112,17 +113,7 @@ def insights(request):
     expense_by_client = {}
     hours_by_client = {}
 
-    def convert(value, currency):
-        currency = currency.upper()
-        if currency == base:
-            return value
-        direct = FxRate.objects.filter(base=currency, quote=base).order_by("-fetched_at").first()
-        inverse = FxRate.objects.filter(base=base, quote=currency).order_by("-fetched_at").first()
-        if direct:
-            return value * direct.rate
-        if inverse and inverse.rate:
-            return value / inverse.rate
-        return None
+    convert = conversion_for(base)
 
     for invoice in Invoice.objects.select_related("client").annotate(
         paid_total=Sum("payments__amount")
