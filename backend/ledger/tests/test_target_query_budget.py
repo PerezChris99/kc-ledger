@@ -15,22 +15,35 @@ from ledger.models import Client, FxRate, Invoice, Payment, Target
 def test_revenue_target_groups_payment_totals_by_currency(staff_client):
     customer = Client.objects.create(name="Target performance client")
     FxRate.objects.create(
-        base="USD", quote="UGX", rate=Decimal("3700"),
-        fetched_at=timezone.now(), source="test",
+        base="USD",
+        quote="UGX",
+        rate=Decimal(3700),
+        fetched_at=timezone.now(),
+        source="test",
     )
     invoice = Invoice.objects.create(
-        client=customer, number="TARGET-PERF-001", title="Converted revenue",
-        issue_date=date.today(), due_date=date.today() + timedelta(days=14),
-        amount=Decimal("370000"), currency="UGX", status=Invoice.Status.PARTIAL,
+        client=customer,
+        number="TARGET-PERF-001",
+        title="Converted revenue",
+        issue_date=date.today(),
+        due_date=date.today() + timedelta(days=14),
+        amount=Decimal(370000),
+        currency="UGX",
+        status=Invoice.Status.PARTIAL,
     )
     for idx in range(50):
         Payment.objects.create(
-            invoice=invoice, client=customer, amount=Decimal("3700.00"),
-            paid_on=date.today(), reference=f"R-{idx}",
+            invoice=invoice,
+            client=customer,
+            amount=Decimal("3700.00"),
+            paid_on=date.today(),
+            reference=f"R-{idx}",
         )
     Target.objects.create(
-        name="Revenue target", type=Target.Type.REVENUE,
-        amount=Decimal("200.00"), currency="USD",
+        name="Revenue target",
+        type=Target.Type.REVENUE,
+        amount=Decimal("200.00"),
+        currency="USD",
         deadline=date.today() + timedelta(days=30),
     )
     with CaptureQueriesContext(connection) as queries:
