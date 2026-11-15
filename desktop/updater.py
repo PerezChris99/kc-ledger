@@ -15,6 +15,20 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 LOG = logging.getLogger("kc-ledger.updater")
+
+def _log_steps():
+    from logging.handlers import RotatingFileHandler
+
+    logger_root = base_dir() / "logs"
+    logger_root.mkdir(parents=True, exist_ok=True)
+    if not any(isinstance(h, RotatingFileHandler) for h in LOG.handlers):
+        handler = RotatingFileHandler(
+            logger_root / "update.log", maxBytes=2_000_000, backupCount=4,
+            encoding="utf-8",
+        )
+        LOG.addHandler(handler)
+        LOG.setLevel(logging.INFO)
+
 REPO = "PerezChris99/kc-ledger"
 MANIFEST_URL = f"https://github.com/{REPO}/releases/latest/download/latest.json"
 VERSION = re.compile(r"^\d+\.\d+\.\d+$")
@@ -209,8 +223,10 @@ def check(manual=False):
     """Return safe update metadata; never execute an unverified binary."""
     from config.version import build_info
 
+    _log_steps()
     current = build_info()
     config = settings()
+    LOG.info("Checking %s desktop update channel", config["channel"])
     cfg = _cfg()
     source = cfg.get("beta_manifest_url") if config["channel"] == "beta" else cfg.get("manifest_url")
     manifest = validate_manifest(_https_json(source or MANIFEST_URL))
@@ -226,6 +242,7 @@ def check(manual=False):
     if config["policy"] == "manual" and not manual and not required:
         return {"status": "available", "version": manifest["version"]}
     path = _download_verified(manifest)
+    LOG.info("Verified signed installer for version %s", manifest["version"])
     global _pending
     with _state_lock:
         _pending = str(path)
@@ -255,6 +272,7 @@ def launch_pending():
     if path.name != f"KCLedger-Setup-{manifest['version']}.exe":
         return False
     verify_installer(path, manifest)
+    LOG.info("Starting signed KC Ledger installer: %s", path.name)
     subprocess.Popen(
         [str(path), "/SILENT", "/NORESTART", "/CLOSEAPPLICATIONS"],
         close_fds=True,

@@ -62,8 +62,12 @@ begin
   ProgramExe := ExpandConstant('{app}\KC Ledger.exe');
   if FileExists(ProgramExe) then begin
     Upgrading := True;
+    // A prior installation may predate the updater; it cannot safely run
+    // migrations until a verified offline checkpoint exists. Fail closed.
+    DeleteFile(ExpandConstant('{localappdata}\KCLedger\rollback\checkpoint.json'));
     if (not Exec(ProgramExe, '--prepare-upgrade', '', SW_HIDE, ewWaitUntilTerminated, Code)) or
-       (Code <> 0) then begin
+       (Code <> 0) or
+       (not FileExists(ExpandConstant('{localappdata}\KCLedger\rollback\checkpoint.json'))) then begin
       Result := 'Database/binary safety backup failed. Installer refused to overwrite old files.';
     end;
   end;

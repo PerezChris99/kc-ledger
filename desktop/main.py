@@ -93,6 +93,35 @@ def run():
         data / "kc-ledger.log", maxBytes=2_000_000, backupCount=4, encoding="utf-8"
     )
     logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
+    # If a verified post-update migration succeeded but the following launch
+    # crashed before health, let the owner return to preserved old binaries.
+    boot_marker = data / "post-update-boot.json"
+    if boot_marker.is_file():
+        import json
+        from tkinter import Tk, messagebox
+
+        state = json.loads(boot_marker.read_text(encoding="utf-8"))
+        if state.get("state") == "starting":
+            ui = Tk()
+            ui.withdraw()
+            rollback = data / "rollback" / "previous-program" / "KC Ledger.exe"
+            recover = rollback.is_file() and messagebox.askyesno(
+                "KC Ledger recovery",
+                "An upgraded version did not finish starting. Restore the previous "
+                "database snapshot and launch the preserved previous version?",
+                parent=ui,
+            )
+            ui.destroy()
+            if recover:
+                from desktop.upgrade import restore_database
+                import subprocess
+
+                restore_database()
+                boot_marker.unlink(missing_ok=True)
+                subprocess.Popen([str(rollback)], close_fds=True)
+                return
+        else:
+            boot_marker.write_text(json.dumps({"state": "starting"}), encoding="utf-8")
     # Allow the owner to configure local PostgreSQL without system-wide secrets.
     # This file is private per-user and is never bundled with the installer.
     from dotenv import load_dotenv
@@ -165,6 +194,8 @@ def run():
         else:
             raise RuntimeError("Local API did not pass the startup health check.")
 
+        if boot_marker.is_file():
+            boot_marker.unlink(missing_ok=True)
         start_scheduler()
         from desktop import updater
         import random
@@ -311,6 +342,9 @@ def self_test() -> None:
 
 def main():
     try:
+        base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+        if str(base) not in sys.path:
+            sys.path.insert(0, str(base))
         actions = {"--prepare-upgrade", "--post-upgrade-check", "--restore-upgrade"}
         selected = actions.intersection(sys.argv[1:])
         if selected:

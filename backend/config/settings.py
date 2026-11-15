@@ -57,6 +57,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "ledger.middleware.ApiRequestLimitsMiddleware",
     "ledger.middleware.DatabaseCutoverGuardMiddleware",
+    "ledger.middleware.MinimumVersionMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

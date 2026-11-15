@@ -40,3 +40,42 @@ class DatabaseCutoverGuardMiddleware:
 
     def __call__(self, request):
         return self.get_response(request)
+
+
+class MinimumVersionMiddleware:
+    """Block financial API writes after a trusted mandatory desktop update."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        import json
+        import os
+        from pathlib import Path
+
+        if os.environ.get("LEDGER_DESKTOP") != "1":
+            return self.get_response(request)
+        path = request.path
+        if not path.startswith("/api/") or path.startswith(
+            (
+                "/api/auth/", "/api/csrf", "/api/session",
+                "/api/version", "/api/health", "/api/desktop/updates",
+            )
+        ):
+            return self.get_response(request)
+        root = Path(os.environ.get("LOCALAPPDATA", "")) / "KCLedger"
+        marker = root / "update-required.json"
+        if marker.exists():
+            from django.http import JsonResponse
+            from config.version import build_info
+            from desktop.updater import version_tuple
+
+            data = json.loads(marker.read_text(encoding="utf-8"))
+            if version_tuple(build_info()["version"]) < version_tuple(
+                data["min_supported_version"]
+            ):
+                return JsonResponse(
+                    {"detail": "A mandatory signed KC Ledger update is required."},
+                    status=426,
+                )
+        return self.get_response(request)

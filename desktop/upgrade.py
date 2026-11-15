@@ -117,6 +117,9 @@ def post_install():
     marker = root / "update-required.json"
     marker.unlink(missing_ok=True)
     (rollback / "upgrade-succeeded").write_text("ok", encoding="ascii")
+    (root / "post-update-boot.json").write_text(
+        json.dumps({"state": "pending", "version_checked": True}), encoding="utf8"
+    )
     LOG.info("Post-install migration and checks successful")
 
 
