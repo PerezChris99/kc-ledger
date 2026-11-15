@@ -90,9 +90,12 @@ def _legacy_sqlite_has_data(path):
         return False
     try:
         with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True) as db:
-            return db.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='django_migrations'"
-            ).fetchone() is not None
+            return (
+                db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='django_migrations'"
+                ).fetchone()
+                is not None
+            )
     except sqlite3.DatabaseError:
         # Do not automatically switch away from a damaged legacy database.
         raise RuntimeError("Existing SQLite database is not readable; restore it first.") from None
@@ -131,9 +134,11 @@ def select_database(environ=None, base_dir=None):
     if mode != "auto":
         return postgres
 
-    marker = Path(
-        env.get("LEDGER_DB_PIN_PATH") or sqlite["NAME"].parent / ".ledger-db-backend"
-    ).expanduser().resolve()
+    marker = (
+        Path(env.get("LEDGER_DB_PIN_PATH") or sqlite["NAME"].parent / ".ledger-db-backend")
+        .expanduser()
+        .resolve()
+    )
     if marker.exists():
         selected = marker.read_text(encoding="ascii").strip()
         if selected not in {"postgres", "sqlite"}:

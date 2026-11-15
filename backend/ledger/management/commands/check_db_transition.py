@@ -15,24 +15,24 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if connection.vendor != "postgresql":
             return
-        legacy = Path(
-            os.environ.get("LEDGER_DB_PATH")
-            or settings.BASE_DIR / "data" / "ledger.sqlite3"
-        ).expanduser().resolve()
+        legacy = (
+            Path(os.environ.get("LEDGER_DB_PATH") or settings.BASE_DIR / "data" / "ledger.sqlite3")
+            .expanduser()
+            .resolve()
+        )
         if not legacy.is_file() or not legacy.stat().st_size:
             return
         try:
             with sqlite3.connect(f"file:{legacy.as_posix()}?mode=ro", uri=True) as db:
                 tables = {
-                    name for (name,) in db.execute(
-                        "SELECT name FROM sqlite_master WHERE type='table'"
-                    )
+                    name
+                    for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
                 }
                 populated = [
-                    name for name in ("auth_user", "ledger_client", "ledger_invoice", "ledger_payment")
-                    if name in tables and db.execute(
-                        f'SELECT 1 FROM "{name}" LIMIT 1'
-                    ).fetchone() is not None
+                    name
+                    for name in ("auth_user", "ledger_client", "ledger_invoice", "ledger_payment")
+                    if name in tables
+                    and db.execute(f'SELECT 1 FROM "{name}" LIMIT 1').fetchone() is not None
                 ]
         except sqlite3.Error as exc:
             raise CommandError(

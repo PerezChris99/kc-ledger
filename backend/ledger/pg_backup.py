@@ -41,16 +41,18 @@ def _executable(name):
 def _connection_args():
     settings = connection.settings_dict
     env = os.environ.copy()
-    env["PGCONNECT_TIMEOUT"] = str(
-        settings.get("OPTIONS", {}).get("connect_timeout", 3)
-    )
+    env["PGCONNECT_TIMEOUT"] = str(settings.get("OPTIONS", {}).get("connect_timeout", 3))
     if settings.get("PASSWORD"):
         env["PGPASSWORD"] = settings["PASSWORD"]
     args = [
-        "--host", settings.get("HOST") or "127.0.0.1",
-        "--port", str(settings.get("PORT") or 5432),
-        "--username", settings["USER"],
-        "--dbname", settings["NAME"],
+        "--host",
+        settings.get("HOST") or "127.0.0.1",
+        "--port",
+        str(settings.get("PORT") or 5432),
+        "--username",
+        settings["USER"],
+        "--dbname",
+        settings["NAME"],
         "--no-password",
     ]
     return args, env
@@ -83,9 +85,7 @@ def write_postgres_backup(destination):
     """Create a pg_dump custom archive; validate before installing atomically."""
     directory = destination.parent
     directory.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(
-        prefix=".kc-ledger-pg-", suffix=".dump", dir=str(directory)
-    )
+    fd, temporary = tempfile.mkstemp(prefix=".kc-ledger-pg-", suffix=".dump", dir=str(directory))
     os.close(fd)
     staged = Path(temporary)
     try:
@@ -117,8 +117,13 @@ def restore_postgres_dump(path):
             "pg_restore",
             [
                 *args,
-                "--clean", "--if-exists", "--no-owner", "--no-acl",
-                "--single-transaction", "--exit-on-error", str(path),
+                "--clean",
+                "--if-exists",
+                "--no-owner",
+                "--no-acl",
+                "--single-transaction",
+                "--exit-on-error",
+                str(path),
             ],
             env=env,
         )
@@ -127,7 +132,5 @@ def restore_postgres_dump(path):
 
 
 def pre_restore_backup(directory):
-    path = directory / (
-        "pre-restore-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".dump"
-    )
+    path = directory / ("pre-restore-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".dump")
     return write_postgres_backup(path)

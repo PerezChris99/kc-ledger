@@ -10,9 +10,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
-from ledger.pg_backup import pre_restore_backup, restore_postgres_dump, validate_dump
-
 from ledger.management.commands.backup_ledger import check_integrity, write_backup
+from ledger.pg_backup import pre_restore_backup, restore_postgres_dump, validate_dump
 
 
 class Command(BaseCommand):
@@ -113,10 +112,11 @@ class Command(BaseCommand):
             return
         if options["confirm"] != "RESTORE-LEDGER":
             raise CommandError("--apply requires --confirm RESTORE-LEDGER.")
-        backup_dir = Path(
-            os.environ.get("LEDGER_BACKUP_DIR")
-            or settings.BASE_DIR / "data" / "backups"
-        ).expanduser().resolve()
+        backup_dir = (
+            Path(os.environ.get("LEDGER_BACKUP_DIR") or settings.BASE_DIR / "data" / "backups")
+            .expanduser()
+            .resolve()
+        )
         backup_dir.mkdir(parents=True, exist_ok=True)
         safety = pre_restore_backup(backup_dir)
         # The application must be offline; do not allow this command to retain

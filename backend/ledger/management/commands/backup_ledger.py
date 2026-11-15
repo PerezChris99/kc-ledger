@@ -74,11 +74,14 @@ class Command(BaseCommand):
         sqlite = connection.vendor == "sqlite"
         default_dir = (
             Path(connection.settings_dict["NAME"]).parent / "backups"
-            if sqlite else settings.BASE_DIR / "data" / "backups"
+            if sqlite
+            else settings.BASE_DIR / "data" / "backups"
         )
-        backup_dir = Path(
-            options["directory"] or os.environ.get("LEDGER_BACKUP_DIR") or default_dir
-        ).expanduser().resolve()
+        backup_dir = (
+            Path(options["directory"] or os.environ.get("LEDGER_BACKUP_DIR") or default_dir)
+            .expanduser()
+            .resolve()
+        )
         secondary = os.environ.get("LEDGER_SECONDARY_BACKUP_DIR", "").strip()
         secondary_path = Path(secondary).expanduser().resolve() if secondary else None
         if secondary_path and secondary_path == backup_dir:

@@ -3,7 +3,6 @@
 from unittest.mock import patch
 
 import pytest
-
 from config.database import POSTGRES, SQLITE, select_database
 
 
