@@ -1,0 +1,2 @@
+# Explicit Linguist classification for JSX after the TypeScript migration.
+*.jsx linguist-language=JavaScript

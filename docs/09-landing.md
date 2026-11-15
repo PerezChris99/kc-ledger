@@ -1,6 +1,11 @@
-# Landing and private access
+# Sign-in and private access
 
-The pre-authentication screen presents KC Ledger as a private financial operations console, with concrete copy, owner sign-in and restricted-access messaging. The visual direction is dark, technical and restrained. The specification requires five self-hosted real stock photographs, an eight-second slideshow, 1200ms crossfades and reduced-motion support. The current initial implementation uses a CSS grid treatment rather than those photography assets; sourcing and self-hosting the licensed imagery remains an explicit visual acceptance item.
+The implemented unauthenticated entry point is a **KC light-themed private owner sign-in**, not a public marketing landing page. The real component is [LoginPage.jsx](../frontend/src/features/auth/LoginPage.jsx), rendered by the authenticated [App.jsx](../frontend/src/App.jsx) flow.
 
-## Changelog
-- 2026-10-28: Added the initial private entry screen and recorded the remaining imagery requirement.
+The entry screen includes a private brand message, username/password form, request feedback and a restricted access indication. Django supplies the authenticated session; CSRF protection applies to sign-in and unsafe requests. A first owner is created from configured environment variables in the Docker route or by an on-device setup dialog in the Windows route.
+
+**Original spec difference:** the 28 October master spec proposed a stock-photo slideshow and dark terminal layout. That is **not implemented**, and the merged light-paper redesign is the current product direction. Do not represent the proposed slideshow as a completed feature or a mandatory release blocker unless the owner explicitly reinstates it.
+
+Release checks: correct autofill and password masking, no credential leakage in logs, visible errors on failed or throttled login, accessible labels, logout/session expiry, and responsive layout at 375px and desktop widths.
+
+_Updated 2026-11-15._

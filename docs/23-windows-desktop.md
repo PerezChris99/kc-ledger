@@ -1,47 +1,40 @@
-# Windows desktop packaging and recovery
+# Windows desktop: build, install and recovery
 
-The source implements a Windows desktop host plus packaging scripts; this is
-not yet a tested or signed release.
+**Status:** Windows package and self-test pass in GitHub Actions, but no signed/clean-device production release has been certified.
 
 ## Build requirements
 
-Windows 10/11 x64, Python 3.12, Node.js 22, Inno Setup 6 and the committed
-npm lockfile. On a Windows workstation, run:
+Windows 10/11 x64, Python 3.12, Node.js 22, Inno Setup 6. Run in PowerShell from a fresh checkout:
 
-    powershell -ExecutionPolicy Bypass -File desktop\build_windows.ps1
+```powershell
+powershell -ExecutionPolicy Bypass -File desktop\build_windows.ps1
+```
 
-The script builds React, runs TypeScript checks, collects static files,
-packages the desktop launcher with PyInstaller and builds an Inno Setup
-per-user installer when ISCC.exe is available. It emits SHA256 hashes.
+The script executes `npm ci`, ESLint and Vite production build; collects Django static files; installs the Python desktop extra; builds a PyInstaller one-folder executable; downloads and checks the Microsoft WebView2 bootstrapper Authenticode signature; then compiles an Inno Setup installer if `ISCC.exe` is present. The script prints SHA-256 hashes. A successful build alone is **not** an installer installation test.
 
-## Runtime
+## Produced files
 
-The installed application runs a local Django API inside a Waitress server
-listening on 127.0.0.1 only, with a native WebView2 window. A Windows mutex
-prevents multiple instances in the same session. The launcher checks API
-health before opening the window and starts APScheduler once.
+- PyInstaller runtime: `dist\KC Ledger\KC Ledger.exe` and bundled dependencies.
+- Inno Setup installer: `installer-output\KC-Ledger-Setup-0.1.0.exe` (when Inno Setup is installed).
+- In GitHub CI, downloadable artifact: `kc-ledger-windows-output`; separate smoke-test JSON: `kc-ledger-windows-smoke`.
 
-- Database: %LOCALAPPDATA%\KCLedger\ledger.sqlite3
-- Session signing key: %LOCALAPPDATA%\KCLedger\.session-key
-- Backups: %LOCALAPPDATA%\KCLedger\backups
-- Logs: %LOCALAPPDATA%\KCLedger\kc-ledger.log
+The app operates without separately installed Python/Node/Docker. WebView2 must be installed, or its signed Microsoft bootstrapper is invoked. That bootstrapper can require network access on first installation.
 
-On a first launch, the owner creates a new private login with no default
-credentials. Before migrating an existing database, a verified online backup
-is created. ReportLab exports PDFs without GTK/Cairo libraries.
+## Runtime storage and recovery
 
-The per-user installer does not delete user financial records on uninstall.
+| File | Per-user location |
+| --- | --- |
+| Database | `%LOCALAPPDATA%\KCLedger\ledger.sqlite3` |
+| Persistent Django signing key | `%LOCALAPPDATA%\KCLedger\.session-key` |
+| Backups | `%LOCALAPPDATA%\KCLedger\backups` |
+| Logs | `%LOCALAPPDATA%\KCLedger\kc-ledger.log` |
 
-## Required remaining validation
+Never delete the per-user data directory as part of a routine upgrade. The installer is configured not to remove financial records on uninstall. Take and verify a backup **before** switching application versions, and use the dedicated restore management command only while the app is stopped.
 
-- Produce and commit npm/Python lockfiles and verify fresh-clone installs
-- Verify Windows WebView2 detection and installation on a clean VM
-- Run Windows 10/11 install, user journey, PDF, restart, crash and upgrade tests
-- Sign the final installer with an externally provided certificate
-- Record installer hashes and a release tag only after successful validation
+## Release check
 
-The browser deployment remains available through Docker Compose.
+Verify clean Windows 10 and 11 installations, first-run account creation, WebView2 GUI use, invoices and PDFs, failed-login behavior, app shutdown/restart, migration from old data, integrity-checked restore, uninstall retention, offline launch and antivirus/SmartScreen behavior. Use an actual signed publisher build for public distribution; publish hashes, supported OS and recovery guidance.
 
-## WebView2 installation prerequisite
+See [production readiness](21-production-readiness.md) for the full runbook. All checked CI steps are described in [verification matrix](24-verification-matrix.md).
 
-The Windows build downloads Microsoft's evergreen WebView2 bootstrapper, verifies its Authenticode signature, and bundles it with Inno Setup. On machines without a registered WebView2 runtime, installation invokes the signed Microsoft bootstrapper. That step requires internet access on the first install; for completely offline distribution the large Microsoft standalone Evergreen installer must be substituted and verified separately. The packaged KC Ledger app still requires no separately installed Python or Node.js.
+_Updated 2026-11-15; old TypeScript and WeasyPrint instructions removed._

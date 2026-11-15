@@ -1,3 +1,7 @@
+> **CURRENT IMPLEMENTATION NOTICE (2026-11-15):** This document preserves the original 2026-10-28 product and acceptance specification as historical planning material. Its claims that TypeScript, WeasyPrint, a dark-first theme, or an unbuilt Windows desktop are the current implementation are **superseded**. The merged application uses React JavaScript/JSX, the KC light-paper design, ReportLab PDF, Django/SQLite and a packaged Windows/WebView2 host. Consult [README](../README.md), [implemented architecture](02-architecture.md), [design](08-design-system.md), [current backlog](19-backlog.md), [production runbook](21-production-readiness.md) and [verification matrix](24-verification-matrix.md) for the authoritative present-day status. Original ambitions that have not been implemented are *not* certified complete by this notice.
+
+---
+
 # KC LEDGER — MASTER SPECIFICATION, TECHNICAL BREAKDOWN & BUILD PROMPT
 
 **Document version:** 1.0
