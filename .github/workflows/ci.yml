@@ -73,6 +73,41 @@ jobs:
       - name: Shutdown
         if: always()
         run: docker compose down --remove-orphans
+  browser_e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend and Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Start isolated KC Ledger Docker environment
+        run: |
+          python -c 'import secrets;from pathlib import Path;Path(".env").write_text("DJANGO_SECRET_KEY="+secrets.token_urlsafe(56)+"\nLEDGER_USERNAME=ledger-ci-owner\nLEDGER_PASSWORD=CI-only-Password-123456789-strong\nDJANGO_DEBUG=0\nDJANGO_ALLOWED_HOSTS=localhost,127.0.0.1\nCOOKIE_SECURE=0\n")'
+          docker compose up --build -d
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/health; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+      - name: Run browser financial workflow tests
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kc-ledger-browser-e2e
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+      - name: Stop isolated Docker environment
+        if: always()
+        run: docker compose down --remove-orphans
+
   desktop:
     runs-on: windows-latest
     steps:
