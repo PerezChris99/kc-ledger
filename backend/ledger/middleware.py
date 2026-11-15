@@ -58,16 +58,21 @@ class MinimumVersionMiddleware:
         path = request.path
         if not path.startswith("/api/") or path.startswith(
             (
-                "/api/auth/", "/api/csrf", "/api/session",
-                "/api/version", "/api/health", "/api/desktop/updates",
+                "/api/auth/",
+                "/api/csrf",
+                "/api/session",
+                "/api/version",
+                "/api/health",
+                "/api/desktop/updates",
             )
         ):
             return self.get_response(request)
         root = Path(os.environ.get("LOCALAPPDATA", "")) / "KCLedger"
         marker = root / "update-required.json"
         if marker.exists():
-            from django.http import JsonResponse
             from config.version import build_info
+            from django.http import JsonResponse
+
             from desktop.updater import version_tuple
 
             data = json.loads(marker.read_text(encoding="utf-8"))
