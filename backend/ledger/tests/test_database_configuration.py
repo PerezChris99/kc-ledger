@@ -3,7 +3,6 @@
 from unittest.mock import patch
 
 import pytest
-
 from config.database import POSTGRES, SQLITE, select_database
 
 
@@ -37,8 +36,9 @@ def test_auto_prefers_postgres_and_pins_it(tmp_path):
         db = select_database(env, tmp_path)
     assert db["ENGINE"] == POSTGRES
     assert (tmp_path / ".db-backend").read_text().strip() == "postgres"
-    with patch("config.database._reachable", return_value=False), pytest.raises(
-        RuntimeError, match="Refusing a silent SQLite failover"
+    with (
+        patch("config.database._reachable", return_value=False),
+        pytest.raises(RuntimeError, match="Refusing a silent SQLite failover"),
     ):
         select_database(env, tmp_path)
 
@@ -55,8 +55,9 @@ def test_auto_sqlite_fallback_is_pinned_across_recovery(tmp_path):
 
 
 def test_auto_without_fallback_fails_closed(tmp_path):
-    with patch("config.database._reachable", return_value=False), pytest.raises(
-        RuntimeError, match="Start PostgreSQL"
+    with (
+        patch("config.database._reachable", return_value=False),
+        pytest.raises(RuntimeError, match="Start PostgreSQL"),
     ):
         select_database(_env(tmp_path, LEDGER_DB_ENGINE="auto"), tmp_path)
     assert not (tmp_path / ".db-backend").exists()
