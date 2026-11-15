@@ -1311,9 +1311,9 @@ def replace_time_entry(request, entry_id: int, payload: TimeEntryIn):
         entry = TimeEntry.objects.select_for_update().filter(pk=entry_id).first()
         if entry is None:
             raise HttpError(404, "Time entry not found.")
-        engagement = Engagement.objects.select_related("client").filter(
-            pk=payload.engagement_id
-        ).first()
+        engagement = (
+            Engagement.objects.select_related("client").filter(pk=payload.engagement_id).first()
+        )
         if engagement is None:
             raise HttpError(404, "Engagement not found.")
         previous_client = entry.client
@@ -1323,14 +1323,18 @@ def replace_time_entry(request, entry_id: int, payload: TimeEntryIn):
         entry.category = payload.category
         entry.started_at = (
             timezone.make_aware(payload.started_at, timezone.get_current_timezone())
-            if timezone.is_naive(payload.started_at) else payload.started_at
+            if timezone.is_naive(payload.started_at)
+            else payload.started_at
         )
         entry.note = payload.note
         entry.full_clean()
         entry.save()
         Event.objects.create(
-            client=entry.client, engagement=engagement,
-            kind="time_entry_updated", category=Event.Category.DELIVERY, polarity=0,
+            client=entry.client,
+            engagement=engagement,
+            kind="time_entry_updated",
+            category=Event.Category.DELIVERY,
+            polarity=0,
             title=f"Time entry updated: {engagement.name}",
             detail=f"Time entry {entry.pk} updated to {entry.hours} hours.",
             occurred_at=timezone.now(),
@@ -1349,9 +1353,13 @@ def archive_time_entry(request, entry_id: int):
             raise HttpError(404, "Time entry not found.")
         entry.delete()
         Event.objects.create(
-            client=entry.client, engagement=entry.engagement,
-            kind="time_entry_archived", category=Event.Category.DELIVERY, polarity=0,
-            title="Time entry archived", detail=f"Time entry {entry.pk} archived.",
+            client=entry.client,
+            engagement=entry.engagement,
+            kind="time_entry_archived",
+            category=Event.Category.DELIVERY,
+            polarity=0,
+            title="Time entry archived",
+            detail=f"Time entry {entry.pk} archived.",
             occurred_at=timezone.now(),
         )
         _refresh_score(entry.client)
@@ -1375,9 +1383,9 @@ def replace_expense(request, expense_id: int, payload: ExpenseIn):
             if client is None:
                 raise HttpError(404, "Client not found.")
         if payload.engagement_id is not None:
-            engagement = Engagement.objects.select_related("client").filter(
-                pk=payload.engagement_id
-            ).first()
+            engagement = (
+                Engagement.objects.select_related("client").filter(pk=payload.engagement_id).first()
+            )
             if engagement is None:
                 raise HttpError(404, "Engagement not found.")
             if client is not None and engagement.client_id != client.pk:
@@ -1395,11 +1403,15 @@ def replace_expense(request, expense_id: int, payload: ExpenseIn):
         expense.full_clean()
         expense.save()
         Event.objects.create(
-            client=client, engagement=engagement,
-            kind="expense_updated", category=Event.Category.MONEY, polarity=0,
+            client=client,
+            engagement=engagement,
+            kind="expense_updated",
+            category=Event.Category.MONEY,
+            polarity=0,
             title=f"Expense updated: {expense.category}",
             detail=f"Expense {expense.pk} updated to {expense.amount} {currency}.",
-            amount=expense.amount, occurred_at=timezone.now(),
+            amount=expense.amount,
+            occurred_at=timezone.now(),
         )
         if previous_client is not None:
             _refresh_score(previous_client)
@@ -1416,11 +1428,15 @@ def archive_expense(request, expense_id: int):
             raise HttpError(404, "Expense not found.")
         expense.delete()
         Event.objects.create(
-            client=expense.client, engagement=expense.engagement,
-            kind="expense_archived", category=Event.Category.MONEY, polarity=0,
+            client=expense.client,
+            engagement=expense.engagement,
+            kind="expense_archived",
+            category=Event.Category.MONEY,
+            polarity=0,
             title=f"Expense archived: {expense.category}",
             detail=f"Expense {expense.pk} archived; historic audit event retained.",
-            amount=expense.amount, occurred_at=timezone.now(),
+            amount=expense.amount,
+            occurred_at=timezone.now(),
         )
         if expense.client is not None:
             _refresh_score(expense.client)
@@ -1435,8 +1451,11 @@ def archive_engagement(request, engagement_id: int):
             raise HttpError(404, "Engagement not found.")
         engagement.delete()
         Event.objects.create(
-            client=engagement.client, engagement=engagement,
-            kind="engagement_archived", category=Event.Category.DELIVERY, polarity=0,
+            client=engagement.client,
+            engagement=engagement,
+            kind="engagement_archived",
+            category=Event.Category.DELIVERY,
+            polarity=0,
             title=f"Engagement archived: {engagement.name}",
             detail=f"Engagement {engagement.pk} archived, historical records retained.",
             occurred_at=timezone.now(),
@@ -1454,18 +1473,24 @@ def list_archived_records(request, limit: int = 100):
         ("time-entry", TimeEntry),
         ("expense", Expense),
     ):
-        for record in model.all_objects.filter(
-            deleted_at__isnull=False
-        ).order_by("-deleted_at")[:limit]:
+        for record in model.all_objects.filter(deleted_at__isnull=False).order_by("-deleted_at")[
+            :limit
+        ]:
             label = (
-                record.name if kind == "engagement" else
-                f"{record.hours} hours · {record.started_at.date()}" if kind == "time-entry"
+                record.name
+                if kind == "engagement"
+                else f"{record.hours} hours · {record.started_at.date()}"
+                if kind == "time-entry"
                 else f"{record.category} · {record.amount} {record.currency}"
             )
-            items.append({
-                "kind": kind, "id": record.pk, "label": label,
-                "deleted_at": record.deleted_at.isoformat(),
-            })
+            items.append(
+                {
+                    "kind": kind,
+                    "id": record.pk,
+                    "label": label,
+                    "deleted_at": record.deleted_at.isoformat(),
+                }
+            )
     items.sort(key=lambda row: row["deleted_at"], reverse=True)
     return {"items": items[:limit]}
 
@@ -1477,20 +1502,22 @@ def restore_archived_record(request, kind: str, record_id: int):
     if model is None:
         raise HttpError(422, "Unsupported archive type.")
     with transaction.atomic():
-        record = model.all_objects.select_for_update().filter(
-            pk=record_id, deleted_at__isnull=False
-        ).first()
+        record = (
+            model.all_objects.select_for_update()
+            .filter(pk=record_id, deleted_at__isnull=False)
+            .first()
+        )
         if record is None:
             raise HttpError(404, "Archived record not found.")
         record.deleted_at = None
         record.save(update_fields=["deleted_at", "updated_at"])
         Event.objects.create(
-            client=record.client, engagement=(
-                record if kind == "engagement" else record.engagement
-            ),
+            client=record.client,
+            engagement=(record if kind == "engagement" else record.engagement),
             kind=f"{kind.replace('-', '_')}_restored",
             category=Event.Category.DELIVERY if kind != "expense" else Event.Category.MONEY,
-            polarity=0, title=f"Archived {kind} restored",
+            polarity=0,
+            title=f"Archived {kind} restored",
             detail=f"{kind} {record.pk} restored from archive.",
             occurred_at=timezone.now(),
         )
