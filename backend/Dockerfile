@@ -2,7 +2,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir "Django>=5.2,<5.3" "django-ninja>=1.3,<2" "APScheduler>=3.10,<4" "reportlab>=4.3,<5" "gunicorn>=22,<24" "whitenoise>=6.7,<7"
+COPY requirements-prod.lock /tmp/requirements-prod.lock
+RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements-prod.lock
 COPY backend/ ./backend/
 WORKDIR /app/backend
 RUN mkdir -p /app/data && DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')" DJANGO_DEBUG=1 python manage.py collectstatic --noinput \
