@@ -215,6 +215,14 @@ def self_test() -> None:
             import django
 
             django.setup()
+            # Verify that the frozen Windows distribution can load PostgreSQL's
+            # bundled libpq driver, even though the smoke DB is SQLite.
+            from psycopg import pq
+
+            assert pq.__impl__ == "binary", (
+                f"Packaged PostgreSQL binary driver is unavailable: {pq.__impl__}"
+            )
+            result["checks"].append("PostgreSQL binary driver bundled")
             from django.contrib.auth import get_user_model
             from django.core.management import call_command
             from django.test import Client as TestClient
