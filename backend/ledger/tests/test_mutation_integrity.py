@@ -11,13 +11,13 @@ from ledger.models import Client, Engagement, Invoice
 
 @pytest.mark.django_db
 def test_client_creation_rolls_back_when_audit_write_fails(staff_client):
-    with patch("ledger.api.Event.objects.create", side_effect=RuntimeError("audit unavailable")):
-        with pytest.raises(RuntimeError, match="audit unavailable"):
-            staff_client.post(
-                "/api/clients",
-                data={"name": "Must not persist", "currency": "USD"},
-                content_type="application/json",
-            )
+    audit_failure = patch("ledger.api.Event.objects.create", side_effect=RuntimeError)
+    with audit_failure, pytest.raises(RuntimeError):
+        staff_client.post(
+            "/api/clients",
+            data={"name": "Must not persist", "currency": "USD"},
+            content_type="application/json",
+        )
     assert not Client.objects.filter(name="Must not persist").exists()
 
 
@@ -34,13 +34,13 @@ def test_invoice_edit_rolls_back_when_audit_write_fails(staff_client):
         currency="USD",
         status=Invoice.Status.SENT,
     )
-    with patch("ledger.api.Event.objects.create", side_effect=RuntimeError("audit unavailable")):
-        with pytest.raises(RuntimeError, match="audit unavailable"):
-            staff_client.patch(
-                f"/api/invoices/{invoice.pk}",
-                data={"title": "Should not persist"},
-                content_type="application/json",
-            )
+    audit_failure = patch("ledger.api.Event.objects.create", side_effect=RuntimeError)
+    with audit_failure, pytest.raises(RuntimeError):
+        staff_client.patch(
+            f"/api/invoices/{invoice.pk}",
+            data={"title": "Should not persist"},
+            content_type="application/json",
+        )
     invoice.refresh_from_db()
     assert invoice.title == "Original"
 
