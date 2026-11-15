@@ -158,3 +158,11 @@ def start_scheduler():
     _scheduler.add_job(refresh_fx_rates, "cron", hour=7, minute=0, id="fx-refresh", replace_existing=True, max_instances=1, coalesce=True)
     _scheduler.start()
     logger.info("KC Ledger background scheduler started.")
+
+
+def stop_scheduler():
+    """Release scheduled workers during graceful desktop shutdown."""
+    global _scheduler
+    if _scheduler is not None and _scheduler.running:
+        _scheduler.shutdown(wait=False)
+    _scheduler = None
