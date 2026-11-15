@@ -264,6 +264,8 @@ def main():
             run()
     except Exception as exc:
         LOG.exception("KC Ledger desktop startup failed")
+        if "--self-test" in sys.argv:
+            sys.exit(1)
         try:
             from tkinter import Tk, messagebox
             root = Tk()

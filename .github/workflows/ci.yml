@@ -135,7 +135,15 @@ jobs:
           if (!(Test-Path $exe)) { throw 'Packaged KC Ledger executable missing' }
           $report = Join-Path $env:RUNNER_TEMP 'kc-ledger-smoke.json'
           $env:LEDGER_SMOKE_REPORT = $report
-          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -PassThru
+          try {
+            if (-not $p.WaitForExit(120000)) {
+              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+              throw 'Packaged Windows executable timed out after 120 seconds'
+            }
+          } finally {
+            if (Test-Path $report) { Get-Content $report }
+          }
           if (Test-Path $report) { Get-Content $report }
           if ($p.ExitCode -ne 0) { throw "Windows executable self-test failed: $($p.ExitCode)" }
           if (!(Test-Path $report)) { throw 'Windows smoke test did not produce its report' }
