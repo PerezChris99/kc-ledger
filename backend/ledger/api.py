@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from django.contrib.auth import authenticate, login, logout
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.db.models import Sum
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
@@ -283,7 +283,7 @@ def health(request):
             cursor.execute("SELECT 1")
             if cursor.fetchone()[0] != 1:
                 raise RuntimeError("Invalid database probe response")
-    except Exception:
+    except (DatabaseError, RuntimeError):
         return JsonResponse({"status": "unavailable", "service": "kc-ledger-api"}, status=503)
     return {"status": "ok", "service": "kc-ledger-api", "time": timezone.now().isoformat()}
 

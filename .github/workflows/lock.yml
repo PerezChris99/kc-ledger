@@ -37,5 +37,16 @@ jobs:
           git add package-lock.json requirements-linux.lock requirements-prod.lock
           if ! git diff --cached --quiet; then
             git commit -m "chore(deps): regenerate reproducible npm and Python Linux locks"
-            git push origin HEAD:perez
+            # Autoformat may have advanced perez while locks were building.
+            # Rebase the lock-only commit onto the latest head and retry safely.
+            for attempt in 1 2 3; do
+              git fetch origin perez
+              git rebase origin/perez
+              if git push origin HEAD:perez; then
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Unable to publish dependency locks after three attempts" >&2
+            exit 1
           fi

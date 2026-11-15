@@ -63,8 +63,7 @@ def _run(name, args, *, env):
         [_executable(name), *args],
         env=env,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         timeout=180,
     )
     if result.returncode != 0:
