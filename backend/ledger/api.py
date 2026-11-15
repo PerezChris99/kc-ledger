@@ -1299,3 +1299,201 @@ def dashboard(request):
         "concentration": concentration,
         "unconverted_currencies": sorted(unknown),
     }
+
+
+@router.put("/time-entries/{entry_id}")
+def replace_time_entry(request, entry_id: int, payload: TimeEntryIn):
+    if payload.hours <= 0 or payload.hours != payload.hours.quantize(Decimal("0.01")):
+        raise HttpError(422, "Hours must be positive with at most two decimal places.")
+    if payload.category not in TimeEntry.Category.values:
+        raise HttpError(422, "Unsupported time-entry category.")
+    with transaction.atomic():
+        entry = TimeEntry.objects.select_for_update().filter(pk=entry_id).first()
+        if entry is None:
+            raise HttpError(404, "Time entry not found.")
+        engagement = Engagement.objects.select_related("client").filter(
+            pk=payload.engagement_id
+        ).first()
+        if engagement is None:
+            raise HttpError(404, "Engagement not found.")
+        previous_client = entry.client
+        entry.engagement = engagement
+        entry.client = engagement.client
+        entry.hours = payload.hours
+        entry.category = payload.category
+        entry.started_at = (
+            timezone.make_aware(payload.started_at, timezone.get_current_timezone())
+            if timezone.is_naive(payload.started_at) else payload.started_at
+        )
+        entry.note = payload.note
+        entry.full_clean()
+        entry.save()
+        Event.objects.create(
+            client=entry.client, engagement=engagement,
+            kind="time_entry_updated", category=Event.Category.DELIVERY, polarity=0,
+            title=f"Time entry updated: {engagement.name}",
+            detail=f"Time entry {entry.pk} updated to {entry.hours} hours.",
+            occurred_at=timezone.now(),
+        )
+        _refresh_score(previous_client)
+        if previous_client.pk != entry.client_id:
+            _refresh_score(entry.client)
+    return {"id": entry.pk, "hours": str(entry.hours)}
+
+
+@router.delete("/time-entries/{entry_id}")
+def archive_time_entry(request, entry_id: int):
+    with transaction.atomic():
+        entry = TimeEntry.objects.select_for_update().filter(pk=entry_id).first()
+        if entry is None:
+            raise HttpError(404, "Time entry not found.")
+        entry.delete()
+        Event.objects.create(
+            client=entry.client, engagement=entry.engagement,
+            kind="time_entry_archived", category=Event.Category.DELIVERY, polarity=0,
+            title="Time entry archived", detail=f"Time entry {entry.pk} archived.",
+            occurred_at=timezone.now(),
+        )
+        _refresh_score(entry.client)
+    return {"archived": True, "id": entry_id}
+
+
+@router.put("/expenses/{expense_id}")
+def replace_expense(request, expense_id: int, payload: ExpenseIn):
+    amount_cents(payload.amount, "Expense amount")
+    if not payload.category.strip() or len(payload.category.strip()) > 80:
+        raise HttpError(422, "Expense category must contain 1–80 characters.")
+    currency = currency_code(payload.currency)
+    with transaction.atomic():
+        expense = Expense.objects.select_for_update().filter(pk=expense_id).first()
+        if expense is None:
+            raise HttpError(404, "Expense not found.")
+        client = None
+        engagement = None
+        if payload.client_id is not None:
+            client = Client.objects.filter(pk=payload.client_id).first()
+            if client is None:
+                raise HttpError(404, "Client not found.")
+        if payload.engagement_id is not None:
+            engagement = Engagement.objects.select_related("client").filter(
+                pk=payload.engagement_id
+            ).first()
+            if engagement is None:
+                raise HttpError(404, "Engagement not found.")
+            if client is not None and engagement.client_id != client.pk:
+                raise HttpError(422, "Engagement does not belong to selected client.")
+            client = client or engagement.client
+        previous_client = expense.client
+        expense.client = client
+        expense.engagement = engagement
+        expense.category = payload.category.strip()
+        expense.amount = payload.amount
+        expense.currency = currency
+        expense.spent_on = payload.spent_on
+        expense.billable = payload.billable
+        expense.note = payload.note
+        expense.full_clean()
+        expense.save()
+        Event.objects.create(
+            client=client, engagement=engagement,
+            kind="expense_updated", category=Event.Category.MONEY, polarity=0,
+            title=f"Expense updated: {expense.category}",
+            detail=f"Expense {expense.pk} updated to {expense.amount} {currency}.",
+            amount=expense.amount, occurred_at=timezone.now(),
+        )
+        if previous_client is not None:
+            _refresh_score(previous_client)
+        if client is not None and (previous_client is None or previous_client.pk != client.pk):
+            _refresh_score(client)
+    return {"id": expense.pk, "amount": str(expense.amount), "currency": expense.currency}
+
+
+@router.delete("/expenses/{expense_id}")
+def archive_expense(request, expense_id: int):
+    with transaction.atomic():
+        expense = Expense.objects.select_for_update().filter(pk=expense_id).first()
+        if expense is None:
+            raise HttpError(404, "Expense not found.")
+        expense.delete()
+        Event.objects.create(
+            client=expense.client, engagement=expense.engagement,
+            kind="expense_archived", category=Event.Category.MONEY, polarity=0,
+            title=f"Expense archived: {expense.category}",
+            detail=f"Expense {expense.pk} archived; historic audit event retained.",
+            amount=expense.amount, occurred_at=timezone.now(),
+        )
+        if expense.client is not None:
+            _refresh_score(expense.client)
+    return {"archived": True, "id": expense_id}
+
+
+@router.delete("/engagements/{engagement_id}")
+def archive_engagement(request, engagement_id: int):
+    with transaction.atomic():
+        engagement = Engagement.objects.select_for_update().filter(pk=engagement_id).first()
+        if engagement is None:
+            raise HttpError(404, "Engagement not found.")
+        engagement.delete()
+        Event.objects.create(
+            client=engagement.client, engagement=engagement,
+            kind="engagement_archived", category=Event.Category.DELIVERY, polarity=0,
+            title=f"Engagement archived: {engagement.name}",
+            detail=f"Engagement {engagement.pk} archived, historical records retained.",
+            occurred_at=timezone.now(),
+        )
+        _refresh_score(engagement.client)
+    return {"archived": True, "id": engagement_id}
+
+
+@router.get("/archived-records")
+def list_archived_records(request, limit: int = 100):
+    limit = min(max(limit, 1), 200)
+    items = []
+    for kind, model in (
+        ("engagement", Engagement),
+        ("time-entry", TimeEntry),
+        ("expense", Expense),
+    ):
+        for record in model.all_objects.filter(
+            deleted_at__isnull=False
+        ).order_by("-deleted_at")[:limit]:
+            label = (
+                record.name if kind == "engagement" else
+                f"{record.hours} hours · {record.started_at.date()}" if kind == "time-entry"
+                else f"{record.category} · {record.amount} {record.currency}"
+            )
+            items.append({
+                "kind": kind, "id": record.pk, "label": label,
+                "deleted_at": record.deleted_at.isoformat(),
+            })
+    items.sort(key=lambda row: row["deleted_at"], reverse=True)
+    return {"items": items[:limit]}
+
+
+@router.post("/archived-records/{kind}/{record_id}/restore")
+def restore_archived_record(request, kind: str, record_id: int):
+    models = {"engagement": Engagement, "time-entry": TimeEntry, "expense": Expense}
+    model = models.get(kind)
+    if model is None:
+        raise HttpError(422, "Unsupported archive type.")
+    with transaction.atomic():
+        record = model.all_objects.select_for_update().filter(
+            pk=record_id, deleted_at__isnull=False
+        ).first()
+        if record is None:
+            raise HttpError(404, "Archived record not found.")
+        record.deleted_at = None
+        record.save(update_fields=["deleted_at", "updated_at"])
+        Event.objects.create(
+            client=record.client, engagement=(
+                record if kind == "engagement" else record.engagement
+            ),
+            kind=f"{kind.replace('-', '_')}_restored",
+            category=Event.Category.DELIVERY if kind != "expense" else Event.Category.MONEY,
+            polarity=0, title=f"Archived {kind} restored",
+            detail=f"{kind} {record.pk} restored from archive.",
+            occurred_at=timezone.now(),
+        )
+        if record.client is not None:
+            _refresh_score(record.client)
+    return {"restored": True, "kind": kind, "id": record_id}
