@@ -4,7 +4,7 @@ import logging
 import os
 import secrets
 
-from django.db import connection
+from django.db import connection, transaction
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
 
@@ -25,26 +25,23 @@ def daily(request):
     if connection.vendor != "postgresql":
         return JsonResponse({"status": "database_unavailable"}, status=503)
 
-    # Session-scoped PostgreSQL advisory lock across concurrent cron invocations.
-    # Vercel invocations never schedule a local APScheduler.
-    acquired = False
+    # Transaction-scoped advisory locks work through managed Postgres
+    # transaction poolers, unlike session-scoped advisory locks.
     try:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT pg_try_advisory_lock(%s)", [LOCK_ID])
-            acquired = cursor.fetchone()[0]
-        if not acquired:
-            return JsonResponse({"status": "already_running"}, status=409)
-        jobs.refresh_instalment_states()
-        jobs.emit_due_reminders()
-        jobs.detect_ghosting()
-        jobs.draft_recurring_invoices()
-        jobs.refresh_fx_rates()
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", [LOCK_ID])
+                acquired = cursor.fetchone()[0]
+            if not acquired:
+                return JsonResponse({"status": "already_running"}, status=409)
+            jobs.refresh_instalment_states()
+            jobs.emit_due_reminders()
+            jobs.detect_ghosting()
+            jobs.draft_recurring_invoices()
+            jobs.refresh_fx_rates()
         return JsonResponse({"status": "ok"})
     except Exception:
         logger.exception("Cron job failure")
         return JsonResponse({"status": "failed"}, status=500)
     finally:
-        if acquired:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT pg_advisory_unlock(%s)", [LOCK_ID])
         connection.close()
