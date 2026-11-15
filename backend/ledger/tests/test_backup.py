@@ -7,6 +7,8 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
 
+pytestmark = pytest.mark.skipif(connection.vendor != "sqlite", reason="SQLite backup API tests")
+
 from ledger.management.commands.backup_ledger import check_integrity, write_backup
 
 

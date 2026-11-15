@@ -7,8 +7,11 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
+
+from ledger.pg_backup import validate_dump, write_postgres_backup
 
 
 def check_integrity(path: Path) -> None:
@@ -40,7 +43,7 @@ def write_backup(destination: Path, source_connection) -> Path:
         temporary_path.unlink(missing_ok=True)
 
 
-def copy_secondary(source: Path, directory: Path) -> Path:
+def copy_secondary(source: Path, directory: Path, verify=check_integrity) -> Path:
     """Copy the verified snapshot off the primary volume, atomically."""
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / source.name
@@ -49,7 +52,7 @@ def copy_secondary(source: Path, directory: Path) -> Path:
     temporary = Path(temp)
     try:
         shutil.copyfile(source, temporary)
-        check_integrity(temporary)
+        verify(temporary)
         os.replace(temporary, target)
         return target
     finally:
@@ -64,34 +67,43 @@ class Command(BaseCommand):
         parser.add_argument("--keep", type=int, default=14, help="Number of backups to retain")
 
     def handle(self, *args, **options):
-        if connection.vendor != "sqlite":
-            raise CommandError("KC Ledger backup requires SQLite.")
+        if connection.vendor not in {"sqlite", "postgresql"}:
+            raise CommandError("Unsupported KC Ledger backup backend.")
         if options["keep"] < 1 or options["keep"] > 1000:
             raise CommandError("--keep must be between 1 and 1000.")
-        database = Path(connection.settings_dict["NAME"])
+        sqlite = connection.vendor == "sqlite"
+        default_dir = (
+            Path(connection.settings_dict["NAME"]).parent / "backups"
+            if sqlite
+            else settings.BASE_DIR / "data" / "backups"
+        )
         backup_dir = (
-            Path(
-                options["directory"]
-                or os.environ.get("LEDGER_BACKUP_DIR")
-                or database.parent / "backups"
-            )
+            Path(options["directory"] or os.environ.get("LEDGER_BACKUP_DIR") or default_dir)
             .expanduser()
             .resolve()
         )
-        connection.ensure_connection()
-        source = connection.connection
-        if source is None:
-            raise CommandError("No open SQLite connection.")
-        filename = datetime.now().strftime("ledger-%Y%m%d-%H%M%S-%f.sqlite3")
-        destination = write_backup(backup_dir / filename, source)
         secondary = os.environ.get("LEDGER_SECONDARY_BACKUP_DIR", "").strip()
-        if secondary:
-            secondary_path = Path(secondary).expanduser().resolve()
-            if secondary_path == backup_dir:
-                raise CommandError("Secondary backup location must differ from primary.")
-            copy_secondary(destination, secondary_path)
+        secondary_path = Path(secondary).expanduser().resolve() if secondary else None
+        if secondary_path and secondary_path == backup_dir:
+            raise CommandError("Secondary backup location must differ from primary.")
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        if sqlite:
+            connection.ensure_connection()
+            if connection.connection is None:
+                raise CommandError("No open SQLite connection.")
+            filename = f"ledger-{timestamp}.sqlite3"
+            destination = write_backup(backup_dir / filename, connection.connection)
+            verify = check_integrity
+        else:
+            filename = f"ledger-{timestamp}.dump"
+            destination = write_postgres_backup(backup_dir / filename)
+            verify = validate_dump
+
+        if secondary_path:
+            copy_secondary(destination, secondary_path, verify=verify)
         backups = sorted(
-            backup_dir.glob("ledger-*.sqlite3"),
+            backup_dir.glob("ledger-*" + (".sqlite3" if sqlite else ".dump")),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )

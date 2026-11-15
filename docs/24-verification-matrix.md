@@ -1,37 +1,31 @@
-# Current verification matrix and evidence
+# KC Ledger verification matrix
 
-KC Ledger is a **single-owner private financial operations console**, not a public bank or multi-tenant SaaS. This document separates *implemented*, *verified by CI*, and *not yet verified on a real device*.
+| Layer | Automated check | Operator acceptance |
+| --- | --- | --- |
+| JavaScript/JSX frontend | ESLint, Vite build, Playwright Chromium financial paths | Keyboard, responsive and full feature UX |
+| Django + SQLite fallback | Django check, migration validation, full pytest | Legacy ledger data recovery |
+| **Django + PostgreSQL primary** | New PostgreSQL 15 service, real connection probe, migrations, full pytest suite | Connection to **your own** local PostgreSQL installation |
+| PostgreSQL backup | Actual `pg_dump -Fc`, archive validation, restore dry-run in CI | Full offline restore drill into disposable database |
+| Backend selection | Pin/fallback/legacy data protection unit tests | Unavailable PostgreSQL, credentials, restart and backend history |
+| Docker | Local PostgreSQL health, Django health, Chromium client/invoice/payment workflow | Database volume retention and host network policy |
+| Windows desktop | PyInstaller/Inno build and native SQLite smoke | Local PostgreSQL startup, offline fallback, upgrades and signed installer |
+| Financial integrity | Decimal, FK/constraints, scoring and FIFO payment tests | Reconcile your actual balances and PDF outputs |
+| Security | Django staff/CSRF/throttle, Python/npm advisory review | Windows OS, disk, network, permissions and backup protection |
 
-| Layer | Source paths | Automated evidence | Additional acceptance needed |
-| --- | --- | --- | --- |
-| JSX/frontend | `frontend/`, `vite.config.js`, `package.json` | ESLint, Vite build, npm advisory audit | Real-device UX, complete accessibility |
-| Language migration | `frontend/**/*.jsx`, `e2e/*.js` | `npm run verify:source`: no TypeScript source/config | GitHub language statistics may be cached |
-| Django/API | `backend/ledger/api*.py` | Django checks, pytest, tests, CSRF and limits | User acceptance on installed product |
-| SQLite/models | `backend/ledger/models.py`, migrations | Migration checks, financial tests, packaged SQLite smoke | Upgrades from actual old backups |
-| Score and instalments | `backend/ledger/services/` | Determinism, allocation/verdict tests | Trial live data reconciliation |
-| Reports | `backend/ledger/services/pdf.py` | PDF tests and Windows bundled PDF smoke | Visual content review and printing |
-| FX and targets | `backend/ledger/services/fx.py`, `api_extra.py` | Conversion, missing-rate and query-budget tests | Actual external provider credentials and quota |
-| Docker/browser | `docker-compose.yml`, `nginx.conf` | Container build, health and Chromium owner journeys | Deployment-specific networking check |
-| Windows desktop | `desktop/` | PyInstaller/Inno Setup build, frozen app self-test | Clean Windows GUI, upgrade, antivirus and code signing |
-| Backups | `backend/ledger/management/commands/` | Backup/restore test suite | Operator recovery drill with real copy |
+All status claims require a completed CI run at the **current commit**. Historical green runs do not certify later database changes.
 
-## Mandatory end-to-end workflows
+```mermaid
+flowchart LR
+  CFG[Database env and pin] --> C{Backend}
+  C -->|postgres| P[(Local PostgreSQL)]
+  C -->|sqlite| S[(SQLite WAL)]
+  P --> H[SELECT 1 health]
+  S --> H
+  H --> M[Migrations and models]
+  M --> A[Financial API tests]
+  A --> B[Backup archive checks]
+```
 
-1. Authentication: owner bootstrap, sign-in, throttling, CSRF, unauthorized mutation refusal, logout and expiry.
-2. Financial journey: client → invoice → plan → partial payment → full payment; reconcile payment allocation, balance, audit and score at each step.
-3. Terminal state: written-off, paid, partial and disputed invoice guard cases, including negative and overpayment requests.
-4. Work tracking: engagement/time entry/expense create → edit → archive → restore; confirm API totals and history.
-5. Multi-currency: known rate, missing rate, manual override, cashflow and target progress with controlled precision.
-6. Recovery: online backup → validate → stop app → restore to disposable database → verify amounts → upgrade and repeat.
-7. Native runtime: install → first-run setup → operate → export PDF → restart → upgrade → uninstall without deleting records.
-8. Browser/PWA: viewport 375px to desktop, keyboard/focus, reduced motion, install prompt, network-offline behavior that does not create false financial writes.
+For the authoritative setup, migration and backup instructions see [docs/25](25-postgresql-and-fallback.md).
 
-## Evidence policy
-
-The 2026-11-15 merged base at `df094e3` had a successful five-job GitHub Actions run: [source and package verification](https://github.com/PerezChris99/kc-ledger/actions/runs/43716306301). **Do not label newer code passed until its own commit checks succeed**. Unobserved acceptance is `not verified`, not `passed`.
-
-## Branch and release rules
-
-Develop on `perez`, merge via PR to `main`, sync `perez` to merged `main`, avoid extra permanent branches. Create a signed external distribution release only after the separate physical-device and recovery gates pass.
-
-_Added 2026-11-15._
+_Updated 2026-11-15._

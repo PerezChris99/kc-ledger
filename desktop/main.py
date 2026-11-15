@@ -1,4 +1,4 @@
-"""One-process Windows KC Ledger: Django, SQLite, Waitress, WebView2."""
+"""One-process Windows KC Ledger: Django, PostgreSQL/SQLite, Waitress, WebView2."""
 import ctypes
 import logging
 import os
@@ -93,6 +93,11 @@ def run():
         data / "kc-ledger.log", maxBytes=2_000_000, backupCount=4, encoding="utf-8"
     )
     logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
+    # Allow the owner to configure local PostgreSQL without system-wide secrets.
+    # This file is private per-user and is never bundled with the installer.
+    from dotenv import load_dotenv
+
+    load_dotenv(data / ".env", override=False)
     kernel = ctypes.windll.kernel32
     kernel.CreateMutexW.restype = ctypes.c_void_p
     mutex = kernel.CreateMutexW(None, False, r"Local\KCLedgerDesktop")
@@ -109,11 +114,16 @@ def run():
             "DJANGO_DEBUG": "0",
             "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost",
             "LEDGER_DB_PATH": str(data / "ledger.sqlite3"),
+            "LEDGER_DB_PIN_PATH": str(data / ".database-backend"),
             "LEDGER_BACKUP_DIR": str(data / "backups"),
             "LEDGER_DESKTOP": "1",
             "COOKIE_SECURE": "0",
             "RUN_SCHEDULER": "0",
         })
+        # Desktop auto-selects local PostgreSQL on first use, but never switches
+        # a pinned financial database during outages or after recovery.
+        os.environ.setdefault("LEDGER_DB_ENGINE", "auto")
+        os.environ.setdefault("LEDGER_ALLOW_SQLITE_FALLBACK", "1")
         import django
         django.setup()
         from django.core.management import call_command
@@ -122,7 +132,16 @@ def run():
         from waitress import create_server
         import webview
 
-        if (data / "ledger.sqlite3").is_file():
+        from django.db import connection
+
+        # Protect existing financial data before applying any schema upgrade.
+        if connection.vendor == "postgresql":
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT to_regclass('public.django_migrations')")
+                has_existing_schema = cursor.fetchone()[0] is not None
+            if has_existing_schema:
+                call_command("backup_ledger", verbosity=0)
+        elif (data / "ledger.sqlite3").is_file():
             call_command("backup_ledger", verbosity=0)
         call_command("migrate", interactive=False, verbosity=0)
         first_owner()
@@ -187,6 +206,7 @@ def self_test() -> None:
                 "DJANGO_SECRET_KEY": secrets.token_urlsafe(64),
                 "DJANGO_DEBUG": "0",
                 "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost,testserver",
+                "LEDGER_DB_ENGINE": "sqlite",
                 "LEDGER_DB_PATH": str(Path(folder) / "smoke.sqlite3"),
                 "LEDGER_DESKTOP": "1",
                 "RUN_SCHEDULER": "0",
@@ -195,6 +215,14 @@ def self_test() -> None:
             import django
 
             django.setup()
+            # Verify that the frozen Windows distribution can load PostgreSQL's
+            # bundled libpq driver, even though the smoke DB is SQLite.
+            from psycopg import pq
+
+            assert pq.__impl__ == "binary", (
+                f"Packaged PostgreSQL binary driver is unavailable: {pq.__impl__}"
+            )
+            result["checks"].append("PostgreSQL binary driver bundled")
             from django.contrib.auth import get_user_model
             from django.core.management import call_command
             from django.test import Client as TestClient

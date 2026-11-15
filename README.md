@@ -1,100 +1,94 @@
 # KC Ledger
 
-**A private financial operations console for one owner.** Record clients, engagements, invoices, instalment plans, payments, expenses and work hours; evaluate client profitability and risk; track goals; maintain an append-only audit history. There is no SaaS multi-tenancy.
+**Private single-owner financial operations console** for clients, engagements, invoices, instalment payments, expenses, work entries, goals, risk scoring, reporting and auditable financial history.
 
-**Implementation as of 15 November 2026:** React 18 with **JavaScript/JSX**, Django 5.2 + Ninja, SQLite WAL, ReportLab PDFs and a Windows native WebView2 host. TypeScript and WeasyPrint are no longer used in the current source. The codebase and its automated checks are not a substitute for real-device release acceptance.
+**Primary database:** local PostgreSQL 15+; **SQLite WAL:** safe fallback, never silently synchronized. The frontend uses React/JavaScript/JSX and Vite; backend uses Django 5.2/Ninja, APScheduler and ReportLab. The native Windows application hosts Django locally through Waitress + WebView2.
 
-## Technology
+## Architecture
 
-| Layer | Implemented technology |
+```mermaid
+flowchart LR
+  UI[React JSX / browser or WebView2] -->|Auth + CSRF| API[Django Ninja API]
+  API --> DOMAIN[Scoring, FIFO payments, audit, PDFs]
+  DOMAIN --> PG[(Local PostgreSQL)]
+  DOMAIN -.Explicit fallback only.-> SQLITE[(SQLite WAL)]
+  JOB[One scheduler] --> PG
+```
+
+| Layer | Stack / behavior |
 | --- | --- |
-| Frontend | React 18, JSX, Vite 8, TanStack Query, Chart.js, Framer Motion |
-| UI | KC light paper: navy `#0B1B3D`, cyan `#2CB4E8`, yellow `#F4C543`, gold `#D7A72A` |
-| API | Django 5.2, Django Ninja, staff cookies and CSRF |
-| Persistence | SQLite WAL, migrations, foreign keys, transactional money allocation, soft archives |
-| Jobs | Single APScheduler instance |
-| Exports | ReportLab PDF |
-| Browser runtime | Docker Compose, Gunicorn, nginx, localhost-bound |
-| Windows runtime | Python 3.12, Waitress, pywebview/WebView2, PyInstaller, Inno Setup |
-| Verification | pytest, Ruff, ESLint, Vite, audit, Docker boot, Chromium E2E, Windows smoke |
+| UI | React 18, JSX, Vite 8, TanStack Query, Chart.js; KC light-paper theme |
+| API | Django 5.2 / Ninja, staff-only sessions, CSRF and request limits |
+| Primary persistence | PostgreSQL, Django migrations, Decimal money, constraints, transactions |
+| Fallback persistence | SQLite WAL, pinned per installation; no automatic failback or replication |
+| Connection performance | 60-second reuse, health checks, short connect timeout, bounded queries |
+| Background jobs | One APScheduler, reminder and FX tasks |
+| Recovery | PostgreSQL custom-format `pg_dump/pg_restore`; SQLite online backup |
+| Windows | Waitress, pywebview/WebView2, PyInstaller + Inno Setup |
+| Tests | pytest/Django, real PostgreSQL CI, SQLite CI, Docker, Chromium E2E, Windows smoke |
 
-## System flow
+## Local installation with PostgreSQL
 
-```mermaid
-flowchart LR
-  U[Owner] --> WEB[React JSX / WebView2 or browser]
-  WEB --> API[Django Ninja API + auth and CSRF]
-  API --> FIN[Scoring and financial services]
-  FIN --> SQL[(SQLite WAL)]
-  API --> AUDIT[Append-only audit]
-  API --> PDF[ReportLab PDFs]
-  JOB[Single scheduler] --> SQL
+Install PostgreSQL 15+ locally. Create a dedicated `kc_ledger` role and database, then copy `.env.example` to `.env`. Set **real secrets** for `DJANGO_SECRET_KEY`, `LEDGER_USERNAME`, `LEDGER_PASSWORD` and `LEDGER_DB_PASSWORD`. The source backend automatically loads `.env`.
+
+```bash
+python -m pip install -e ".[dev]"
+python backend/manage.py db_status
+python backend/manage.py migrate --noinput
+python backend/manage.py ensure_owner
+python backend/manage.py runserver 127.0.0.1:8000
 ```
 
-```mermaid
-flowchart LR
-  EXE[KC Ledger.exe] --> W[WebView2 window]
-  EXE --> LOCAL[Waitress 127.0.0.1]
-  W --> LOCAL
-  LOCAL --> STORE[(Per-user SQLite in LOCALAPPDATA)]
-  EXE --> BACKUP[Verified backup before migrations]
-```
+The diagnostic must report **`postgresql`**, or the app is not using the intended primary database. For the React dev server, run `npm ci` then `npm run dev` in another terminal.
 
-## Run in Docker (browser)
+**Complete database setup, PowerShell guidance, safe SQLite migration, backend pinning and recovery:** [PostgreSQL & fallback runbook](docs/25-postgresql-and-fallback.md).
 
-Copy `.env.example` to `.env`. Configure a unique `DJANGO_SECRET_KEY` (40+ characters), `LEDGER_USERNAME` and `LEDGER_PASSWORD` (16+ characters). Never commit that file.
+## Local Docker installation
 
 ```bash
 docker compose up --build -d
 docker compose ps
+docker compose exec api python manage.py db_status
 ```
 
-Open <http://127.0.0.1:8080>. The app is deliberately bound to host loopback, **not the public network**. The owner is created once on first initialization; later environment changes do not reset existing credentials. Use `docker compose logs -f api` for troubleshooting. To populate disposable fictional data only: `docker compose exec api python manage.py seed_demo`.
+Open <http://127.0.0.1:8080>. Compose provisions **its own local PostgreSQL 15** on an internal network, with persisted data in `ledger_pgdata`; it is not the separately installed PostgreSQL on your Windows host. Port 5432 is not exposed. Set `LEDGER_DB_PASSWORD` in `.env` **before** first launch. Never use `docker compose down -v` on a real ledger.
 
-## Windows desktop
+**Existing SQLite volume?** The upgrade refuses to start against a new empty PostgreSQL database until legacy data is deliberately migrated and verified. See [migration steps](docs/25-postgresql-and-fallback.md). Data is not erased by this code change.
 
-On **Windows 10/11 x64**, with Python 3.12, Node.js 22 and Inno Setup 6 installed on the **build machine**, run:
+## Native Windows desktop
+
+Build on Windows 10/11 x64 with Python 3.12, Node.js 22 and Inno Setup 6:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File desktop\build_windows.ps1
 ```
 
-Output is the PyInstaller executable and, when Inno Setup is available, an installer under `installer-output/`. Installed KC Ledger requires no separately installed Node, Python or Docker; WebView2 is required (a signed Microsoft bootstrapper is bundled). On first launch an owner setup dialog creates credentials. Financial data, logs and backups are retained in `%LOCALAPPDATA%\KCLedger`. **Do not distribute as a trusted signed release until clean-Windows installation, upgrade, recovery and code-signing checks are complete.**
+The installed application reads local PostgreSQL settings from `%LOCALAPPDATA%\KCLedger\.env`, or the OS environment. In automatic mode, a fresh installation prefers PostgreSQL; SQLite is selected only if PostgreSQL is offline and fallback is allowed, and is then **pinned** to avoid split ledgers. Existing SQLite installations stay on their current data until migrated. The packaged app does not require separately installed Python/Node/Docker. PostgreSQL-mode backups require installed `pg_dump/pg_restore` tools.
 
-## Verify and release
+## Health and verification
 
 ```bash
-python -m pip install -e ".[dev]"
+python backend/manage.py db_status
 python backend/manage.py check
 python backend/manage.py makemigrations --check --dry-run
 pytest -q
 ruff check backend
 ruff format --check backend
-npm ci
 npm run verify:source
 npm run lint
 npm run build
 ```
 
-The GitHub Actions pipeline additionally checks dependencies, launches Docker, exercises Chromium owner/financial journeys and builds/smoke-tests a packaged Windows executable. The last *pre-hardening* merged base was green on [2026-11-15](https://github.com/PerezChris99/kc-ledger/actions/runs/43716306301); inspect the **latest** commit status before trusting subsequent changes.
-
-**Release acceptance still needs:** clean Windows interactive installation, first-run and upgrade journeys, signed installer, restore drill, off-device backup policy, actual external FX-provider verification and accessible real-device UX. Green CI is not proof of 100% correctness.
+The `/api/health` endpoint tests the configured database connection and returns HTTP **503** when it is unavailable. CI separately tests SQLite and **real PostgreSQL**, verifies DB migrations/backups, checks Docker/Chromium financial flows and packages Windows. A green CI build does not establish access to your own local PostgreSQL or confirm a clean Windows installer acceptance test.
 
 ## Documentation
 
-- [Setup and developer workflow](docs/01-setup.md)
-- [Implemented architecture](docs/02-architecture.md)
-- [API routes and financial invariants](docs/07-api.md)
-- [Current KC light-paper design](docs/08-design-system.md)
-- [Backlog and release gates](docs/19-backlog.md)
-- [Troubleshooting and restore](docs/20-troubleshooting.md)
-- [Security, production and release runbook](docs/21-production-readiness.md)
-- [Windows packaging](docs/23-windows-desktop.md)
-- [Evidence and verification matrix](docs/24-verification-matrix.md)
-- [Original 2026-10-28 master specification (historical)](docs/00-master-spec.md)
+- [Installation](docs/01-setup.md) · [Architecture](docs/02-architecture.md) · [Data model](docs/03-data-model.md)
+- [PostgreSQL connection, fallback and SQLite migration](docs/25-postgresql-and-fallback.md)
+- [API](docs/07-api.md) · [Design](docs/08-design-system.md) · [Troubleshooting](docs/20-troubleshooting.md)
+- [Readiness runbook](docs/21-production-readiness.md) · [Windows packaging](docs/23-windows-desktop.md)
+- [Verification matrix](docs/24-verification-matrix.md) · [Historical specification](docs/00-master-spec.md)
 
-## Source control and licensing
+## Copyright and governance
 
-Commit changes on `perez`, review the CI checks, merge into `main`, and sync `perez` to the merge commit. The repository is **currently public** despite its proprietary [LICENSE](LICENSE); keep all secrets, customer data and credentials out of version control. Ownership and copyright restrictions are separate from GitHub visibility.
-
-Copyright © 2026 KC. Proprietary software. See [LICENSE](LICENSE).
+Private financial records, owner credentials, database files, PostgreSQL passwords and `.env` must never enter Git. Changes go to `perez` and are merged into `main` after CI verification. Software is **proprietary**; see [LICENSE](LICENSE). Repository visibility and data access must be managed separately.

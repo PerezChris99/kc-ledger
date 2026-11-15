@@ -14,6 +14,7 @@ jobs:
       DJANGO_SECRET_KEY: CI-only-nonproduction-secret-key-change-on-every-deployment-123456789
       DJANGO_DEBUG: '1'
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      LEDGER_DB_ENGINE: sqlite
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,6 +39,56 @@ jobs:
           ruff format --check backend
       - name: Dependency security review
         run: pip-audit -r requirements-linux.lock --disable-pip --no-deps --require-hashes
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: ledger_ci
+          POSTGRES_USER: ledger_ci
+          POSTGRES_PASSWORD: CI-only-db-password-123456
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ledger_ci -d ledger_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DJANGO_SECRET_KEY: CI-only-PostgreSQL-test-key-123456789012345678901234567890
+      DJANGO_DEBUG: '1'
+      DJANGO_SETTINGS_MODULE: config.test_settings
+      LEDGER_DB_ENGINE: postgres
+      LEDGER_DB_HOST: 127.0.0.1
+      LEDGER_DB_PORT: '5432'
+      LEDGER_DB_NAME: ledger_ci
+      LEDGER_DB_USER: ledger_ci
+      LEDGER_DB_PASSWORD: CI-only-db-password-123456
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python and PostgreSQL client tools
+        run: |
+          python -m pip install -e ".[dev]"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Verify local PostgreSQL connection, schema and migrations
+        run: |
+          python backend/manage.py db_status
+          python backend/manage.py check --database default
+          python backend/manage.py migrate --noinput
+          python backend/manage.py makemigrations --check --dry-run
+      - name: Run complete financial API suite against real PostgreSQL
+        run: pytest -q
+      - name: Create and validate an actual PostgreSQL archive
+        run: |
+          python backend/manage.py backup_ledger --directory "$RUNNER_TEMP/ledger-backups"
+          snapshot=$(find "$RUNNER_TEMP/ledger-backups" -maxdepth 1 -name 'ledger-*.dump' -type f | head -n 1)
+          test -n "$snapshot"
+          python backend/manage.py restore_ledger "$snapshot"
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -57,6 +108,8 @@ jobs:
         run: npm audit --audit-level=high
   docker:
     runs-on: ubuntu-latest
+    env:
+      LEDGER_DB_PASSWORD: CI-only-db-password-123456
     steps:
       - uses: actions/checkout@v4
       - name: Build both local containers
@@ -76,6 +129,8 @@ jobs:
         run: docker compose down --remove-orphans
   browser_e2e:
     runs-on: ubuntu-latest
+    env:
+      LEDGER_DB_PASSWORD: CI-only-db-password-123456
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

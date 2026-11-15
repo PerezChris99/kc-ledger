@@ -1,37 +1,35 @@
-# KC Ledger: implemented architecture
+# KC Ledger — implemented architecture
 
-KC Ledger is a private, **single-owner** financial operations application. Django is the sole source of financial truth; React displays real API data. There is no multi-tenant server, distributed queue, or bidirectional offline financial sync.
+KC Ledger is a single-owner financial operations system. React (JavaScript/JSX) reads live Django Ninja endpoints; Django owns transactions, authorization, scoring and persistence. **Local PostgreSQL is authoritative by default.** SQLite WAL remains an explicit fallback for offline desktops or isolated development. No cross-database synchronization or multi-tenant service exists.
 
 ```mermaid
 flowchart LR
-  U[Owner: WebView2 or browser] --> R[React 18 / JSX / Vite build]
-  R -->|Same-origin session + CSRF| A[Django Ninja API]
-  A --> S[Financial services: scoring, FIFO, FX]
-  A --> D[(SQLite WAL + migrations)]
-  S --> D
-  A --> E[Immutable event log]
-  J[One APScheduler instance] --> D
-  A --> P[ReportLab PDF exports]
+  U[Owner browser / WebView2] --> R[React JSX / Vite]
+  R -->|Session and CSRF| API[Django Ninja]
+  API --> S[Transactions, scoring, FIFO]
+  S --> DB[(Local PostgreSQL)]
+  API --> DB
+  J[One APScheduler] --> DB
+  API --> P[ReportLab PDF]
+  API --> AUDIT[Append-only audit events]
+  DB -.One-time deliberate mode choice.-> F[(SQLite WAL fallback)]
 ```
 
-## Two supported launch modes
+## Runtime variants
 
-**Docker browser:** nginx serves the built React app, proxies `/api/` to a single Django/Gunicorn service, and binds on `127.0.0.1:8080`. The database persists in a named Docker volume. A host-only HTTP service must not be exposed publicly without a separate designed and verified TLS/network security boundary.
+**Local source:** Django connects to the owner's PostgreSQL listening on `127.0.0.1:5432`, with dedicated credentials from the repository-root `.env`. A successful `db_status` probe proves a live connection.
 
-**Windows native:** `desktop/main.py` starts Django/Waitress in the same process, binds to `127.0.0.1` on an ephemeral port, applies migrations after backing up the existing database, initializes the owner on first launch, runs the scheduler once and opens a pywebview WebView2 window. SQLite, logs, and backups are stored in `%LOCALAPPDATA%\KCLedger`.
+**Docker:** a local PostgreSQL 15 container (`db`) and Django container (`api`) share an internal Compose network; PostgreSQL is **not published** on host port 5432. `ledger_pgdata` persists data; the API uses `LEDGER_DB_ENGINE=postgres` and refuses silent fallback.
 
-## Critical invariants
+**Windows native:** a single pywebview + Waitress host selects PostgreSQL or pinned SQLite according to per-user configuration and whether PostgreSQL is reachable. Existing SQLite data is detected and preserved. The backend never silently swaps data stores when the chosen store goes offline.
 
-1. Backend uses Python `Decimal` for currency amounts; payment allocations and write-offs are guarded by database transactions.
-2. Clients, invoices, engagements, work records, FX rates and targets are persisted by Django; charts and counters must not substitute demo values on live paths.
-3. Paid and partial invoice statuses follow actual recorded payments; written-off amounts must not appear as collectible balances.
-4. A client health score is explainable and recomputed after relevant operations; schedulers should be started once, never per worker.
-5. Audit events are immutable; work records use reversible soft archives.
-6. Sessions and unsafe API mutations use cookie authentication and CSRF; API request limits, a persistent login throttle and localhost binding are enforced.
-7. SQLite's online backup API and guarded offline restore are the recovery mechanism; filesystem copying of an active WAL database is not a backup strategy.
+## Database and security invariants
 
-## Production distinction
-
-Passing unit tests, Chromium E2E, Docker boot and a Windows packaged executable self-test does not certify a clean-Windows installation or the third-party FX provider. See [release checklist](21-production-readiness.md) and [test matrix](24-verification-matrix.md).
+- PostgreSQL settings enable 60-second persistent connections with health checks, 3-second connect timeout, bounded SQL statement duration and transaction-idle limits; these values are configurable.
+- Financial amounts use Decimal, FK constraints, indexed status/date columns and database transactions; creation/updates emit audit records atomically.
+- A successful `/api/health` **requires** an actual `SELECT 1` against the configured authoritative database; it returns 503 when that database is unavailable.
+- Django sessions, payments, allocations, events, targets and scheduled jobs use only the active backend. No client-facing fake data or split-brain offline writes.
+- PostgreSQL backups use `pg_dump` custom archives; SQLite backups use the native online backup API. Restores are explicit and require operator confirmation.
+- The former SQLite-only architecture is historical. See the [migration and fallback runbook](25-postgresql-and-fallback.md).
 
 _Updated 2026-11-15._

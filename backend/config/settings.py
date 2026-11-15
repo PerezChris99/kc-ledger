@@ -1,7 +1,12 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+from .database import select_database
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR.parent / ".env", override=False)
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0").lower() in {"1", "true", "yes"}
 if not SECRET_KEY:
@@ -35,6 +40,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "ledger.middleware.ApiRequestLimitsMiddleware",
+    "ledger.middleware.DatabaseCutoverGuardMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -56,11 +62,7 @@ TEMPLATES = [
         },
     }
 ]
-DB_PATH = Path(os.environ.get("LEDGER_DB_PATH", BASE_DIR / "data" / "ledger.sqlite3"))
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-DATABASES = {
-    "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": DB_PATH, "OPTIONS": {"timeout": 20}}
-}
+DATABASES = {"default": select_database(base_dir=BASE_DIR)}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
