@@ -7,7 +7,7 @@ const version = readFileSync(resolve(root, "VERSION"), "utf8").trim();
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("VERSION must be MAJOR.MINOR.PATCH");
 const channel = process.env.LEDGER_RELEASE_CHANNEL || "stable";
 if (!["stable", "beta"].includes(channel)) throw new Error("Invalid update channel");
-const minimum = process.env.LEDGER_MIN_SUPPORTED_VERSION || version;
+const minimum = process.env.LEDGER_MIN_SUPPORTED_VERSION || "0.0.0";
 if (!/^\d+\.\d+\.\d+$/.test(minimum)) throw new Error("Invalid minimum supported version");
 let sha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || "unknown";
 if (sha === "unknown") {

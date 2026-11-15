@@ -25,7 +25,7 @@ def build_info():
     sha = os.environ.get("VERCEL_GIT_COMMIT_SHA", os.environ.get("GITHUB_SHA", "unknown"))
     channel = info.get("channel", os.environ.get("LEDGER_RELEASE_CHANNEL", "stable"))
     minimum = info.get(
-        "min_supported_version", os.environ.get("LEDGER_MIN_SUPPORTED_VERSION", version)
+        "min_supported_version", os.environ.get("LEDGER_MIN_SUPPORTED_VERSION", "0.0.0")
     )
     if channel not in {"stable", "beta"}:
         raise RuntimeError("Invalid KC Ledger release channel")

@@ -90,7 +90,7 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
-          $minimum = if ($env:LEDGER_MIN_SUPPORTED_VERSION) { $env:LEDGER_MIN_SUPPORTED_VERSION } else { $version }
+          $minimum = if ($env:LEDGER_MIN_SUPPORTED_VERSION) { $env:LEDGER_MIN_SUPPORTED_VERSION } else { "0.0.0" }
           python scripts/create_release_manifest.py "installer-output\KCLedger-Setup-$version.exe" --version $version --channel $env:LEDGER_RELEASE_CHANNEL --minimum $minimum --rollout ([int]$env:LEDGER_ROLLOUT_PERCENT)
           if ($LASTEXITCODE -ne 0) { throw 'Manifest generation failed' }
       - name: Publish signed and tested GitHub Release assets
