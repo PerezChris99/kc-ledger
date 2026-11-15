@@ -37,7 +37,7 @@ jobs:
           ruff check backend
           ruff format --check backend
       - name: Dependency security review
-        run: pip-audit --disable-pip --skip-editable
+        run: pip-audit -r requirements-linux.lock --disable-pip --no-deps --require-hashes
   frontend:
     runs-on: ubuntu-latest
     steps:
