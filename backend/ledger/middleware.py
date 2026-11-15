@@ -1,4 +1,5 @@
 """Bound API request sizes on both Docker and native desktop runtimes."""
+
 from django.http import HttpResponse, HttpResponseBadRequest
 
 
