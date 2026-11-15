@@ -177,7 +177,9 @@ def self_test() -> None:
     report_path = os.environ.get("LEDGER_SMOKE_REPORT")
     result = {"status": "failed", "checks": []}
     try:
-        with tempfile.TemporaryDirectory(prefix="kc-ledger-smoke-") as folder:
+        temp = tempfile.TemporaryDirectory(prefix="kc-ledger-smoke-")
+        try:
+            folder = temp.name
             base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
             sys.path.insert(0, str(base / "backend"))
             os.environ.update({
@@ -246,6 +248,10 @@ def self_test() -> None:
             assert Invoice.objects.get(pk=inv.pk).number == "SMOKE-001"
             result["checks"].append("SQLite persistence after reconnect")
             result["status"] = "passed"
+        finally:
+            from django.db import connections
+            connections.close_all()
+            temp.cleanup()
     except Exception as exc:
         result["error"] = repr(exc)
         LOG.exception("Packaged desktop smoke test failed")
