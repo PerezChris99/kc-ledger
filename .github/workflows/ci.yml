@@ -37,7 +37,7 @@ jobs:
           ruff check backend
           ruff format --check backend
       - name: Dependency security review
-        run: pip-audit --disable-pip --skip-editable
+        run: pip-audit -r requirements-linux.lock --disable-pip --no-deps --require-hashes
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -73,6 +73,41 @@ jobs:
       - name: Shutdown
         if: always()
         run: docker compose down --remove-orphans
+  browser_e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend and Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Start isolated KC Ledger Docker environment
+        run: |
+          python -c 'import secrets;from pathlib import Path;Path(".env").write_text("DJANGO_SECRET_KEY="+secrets.token_urlsafe(56)+"\nLEDGER_USERNAME=ledger-ci-owner\nLEDGER_PASSWORD=CI-only-Password-123456789-strong\nDJANGO_DEBUG=0\nDJANGO_ALLOWED_HOSTS=localhost,127.0.0.1\nCOOKIE_SECURE=0\n")'
+          docker compose up --build -d
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/health; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+      - name: Run browser financial workflow tests
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kc-ledger-browser-e2e
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+      - name: Stop isolated Docker environment
+        if: always()
+        run: docker compose down --remove-orphans
+
   desktop:
     runs-on: windows-latest
     steps:
@@ -93,6 +128,33 @@ jobs:
         run: |
           $env:PATH += ";C:\Program Files (x86)\Inno Setup 6"
           & desktop\build_windows.ps1
+      - name: Smoke-test packaged Windows executable
+        shell: pwsh
+        run: |
+          $exe = Join-Path (Get-Location) 'dist\KC Ledger\KC Ledger.exe'
+          if (!(Test-Path $exe)) { throw 'Packaged KC Ledger executable missing' }
+          $report = Join-Path $env:RUNNER_TEMP 'kc-ledger-smoke.json'
+          $env:LEDGER_SMOKE_REPORT = $report
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -PassThru
+          try {
+            if (-not $p.WaitForExit(120000)) {
+              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+              throw 'Packaged Windows executable timed out after 120 seconds'
+            }
+          } finally {
+            if (Test-Path $report) { Get-Content $report }
+          }
+          if (Test-Path $report) { Get-Content $report }
+          if ($p.ExitCode -ne 0) { throw "Windows executable self-test failed: $($p.ExitCode)" }
+          if (!(Test-Path $report)) { throw 'Windows smoke test did not produce its report' }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if ($result.status -ne 'passed') { throw 'Desktop runtime smoke assertions failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kc-ledger-windows-smoke
+          path: ${{ runner.temp }}/kc-ledger-smoke.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()
         with:

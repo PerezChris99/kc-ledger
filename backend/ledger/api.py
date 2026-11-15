@@ -16,7 +16,6 @@ from ledger.models import (
     Engagement,
     Event,
     Expense,
-    FxRate,
     Instalment,
     Invoice,
     Payment,
@@ -24,6 +23,7 @@ from ledger.models import (
     PlanMeta,
     TimeEntry,
 )
+from ledger.services.fx import conversion_for
 from ledger.services.instalments import allocate_payment_fifo, evaluate_plan_verdict
 from ledger.services.scoring import compute_client_score
 from ledger.validation import amount_cents, currency_code
@@ -142,17 +142,7 @@ def _client_snapshot(client):
 
     base = _get_app_settings()["base_currency"]
 
-    def convert(value, currency):
-        currency = currency.upper()
-        if currency == base:
-            return value
-        direct = FxRate.objects.filter(base=currency, quote=base).order_by("-fetched_at").first()
-        if direct:
-            return value * direct.rate
-        inverse = FxRate.objects.filter(base=base, quote=currency).order_by("-fetched_at").first()
-        if inverse and inverse.rate:
-            return value / inverse.rate
-        return None
+    convert = conversion_for(base)
 
     invoices = []
     currency_gaps = set()
@@ -1144,15 +1134,7 @@ def dashboard(request):
     base = _get_app_settings()["base_currency"]
     today = timezone.localdate()
 
-    def convert(value, currency):
-        currency = currency.upper()
-        if currency == base:
-            return value
-        rate = FxRate.objects.filter(base=currency, quote=base).order_by("-fetched_at").first()
-        if rate:
-            return value * rate.rate
-        inverse = FxRate.objects.filter(base=base, quote=currency).order_by("-fetched_at").first()
-        return value / inverse.rate if inverse and inverse.rate else None
+    convert = conversion_for(base)
 
     collected = outstanding = overdue = expenses_total = Decimal(0)
     unknown = set()

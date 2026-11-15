@@ -165,11 +165,113 @@ def run():
         kernel.CloseHandle(ctypes.c_void_p(mutex))
 
 
+
+
+def self_test() -> None:
+    """Exercise bundled backend, migrations, static HTML, financial API and PDF."""
+    import json
+    import tempfile
+    from datetime import date, timedelta
+    from decimal import Decimal
+
+    report_path = os.environ.get("LEDGER_SMOKE_REPORT")
+    result = {"status": "failed", "checks": []}
+    try:
+        temp = tempfile.TemporaryDirectory(prefix="kc-ledger-smoke-")
+        try:
+            folder = temp.name
+            base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+            sys.path.insert(0, str(base / "backend"))
+            os.environ.update({
+                "DJANGO_SETTINGS_MODULE": "config.settings",
+                "DJANGO_SECRET_KEY": secrets.token_urlsafe(64),
+                "DJANGO_DEBUG": "0",
+                "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost,testserver",
+                "LEDGER_DB_PATH": str(Path(folder) / "smoke.sqlite3"),
+                "LEDGER_DESKTOP": "1",
+                "RUN_SCHEDULER": "0",
+                "COOKIE_SECURE": "0",
+            })
+            import django
+
+            django.setup()
+            from django.contrib.auth import get_user_model
+            from django.core.management import call_command
+            from django.test import Client as TestClient
+            from ledger.models import Client, Invoice, Payment
+
+            call_command("migrate", interactive=False, verbosity=0)
+            result["checks"].append("Migrations applied")
+            user = get_user_model().objects.create_user(
+                username="smoke-owner", password=secrets.token_urlsafe(36), is_staff=True
+            )
+            browser = TestClient()
+            browser.force_login(user)
+            health = browser.get("/api/health")
+            assert health.status_code == 200, f"API health: {health.status_code}"
+            result["checks"].append("API health 200")
+
+            page = browser.get("/")
+            assert page.status_code == 200, f"React shell: {page.status_code}"
+            assert b"KC Ledger" in b"".join(page.streaming_content), "React HTML missing brand"
+            result["checks"].append("Packaged React HTML served")
+
+            customer = Client.objects.create(name="Desktop smoke test client")
+            inv = Invoice.objects.create(
+                client=customer, number="SMOKE-001", title="Desktop validation",
+                amount=Decimal("100.00"), currency="USD",
+                issue_date=date.today(), due_date=date.today() + timedelta(days=14),
+                status=Invoice.Status.SENT,
+            )
+            payment = browser.post(
+                "/api/payments",
+                data=json.dumps({
+                    "invoice_id": inv.pk, "amount": "25.00",
+                    "paid_on": date.today().isoformat(), "method": "manual",
+                    "reference": "DESKTOP-SMOKE-001",
+                }),
+                content_type="application/json",
+            )
+            assert payment.status_code == 200, (
+                f"Payment API returned {payment.status_code}: {payment.content[:1000]!r}"
+            )
+            assert Payment.objects.filter(invoice=inv).count() == 1
+            result["checks"].append("Financial payment transaction persisted")
+
+            pdf = browser.get(f"/api/invoices/{inv.pk}/pdf")
+            assert pdf.status_code == 200, f"Invoice PDF response {pdf.status_code}"
+            assert pdf.content.startswith(b"%PDF"), "Invoice PDF invalid"
+            result["checks"].append("Portable PDF generated")
+
+            from django.db import connection
+            connection.close()
+            assert Invoice.objects.get(pk=inv.pk).number == "SMOKE-001"
+            result["checks"].append("SQLite persistence after reconnect")
+            result["status"] = "passed"
+        finally:
+            from django.db import connections
+            connections.close_all()
+            temp.cleanup()
+    except Exception as exc:
+        result["error"] = repr(exc)
+        LOG.exception("Packaged desktop smoke test failed")
+    if report_path:
+        Path(report_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(report_path).write_text(json.dumps(result, indent=2), encoding="utf-8")
+    if result["status"] != "passed":
+        raise RuntimeError("Desktop self-test failed: " + result.get("error", "unknown"))
+
+
 def main():
     try:
-        run()
+        if "--self-test" in sys.argv:
+            self_test()
+        else:
+            run()
     except Exception as exc:
         LOG.exception("KC Ledger desktop startup failed")
+        if "--self-test" in sys.argv:
+            sys.exit(1)
         try:
             from tkinter import Tk, messagebox
             root = Tk()

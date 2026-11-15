@@ -21,3 +21,6 @@ backups/
 .DS_Store
 .idea/
 .vscode/
+
+# Windows package-only Microsoft prerequisite download
+desktop/MicrosoftEdgeWebView2Setup.exe

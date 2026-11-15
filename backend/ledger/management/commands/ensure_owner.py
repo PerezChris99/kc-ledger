@@ -20,9 +20,7 @@ class Command(BaseCommand):
             raise CommandError(
                 "Set LEDGER_PASSWORD to a unique password of at least 16 characters."
             )
-        if not debug and (
-            len(secret) < 40 or secret.startswith("unsafe-") or secret.startswith("replace-with-")
-        ):
+        if not debug and (len(secret) < 40 or secret.startswith(("unsafe-", "replace-with-"))):
             raise CommandError(
                 "Set DJANGO_SECRET_KEY to a random secret of at least 40 characters."
             )
