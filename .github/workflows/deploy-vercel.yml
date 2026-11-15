@@ -6,6 +6,7 @@ on:
     branches: [main]
 permissions:
   contents: read
+  id-token: write
 concurrency:
   group: kc-ledger-vercel-production
   cancel-in-progress: false
@@ -49,6 +50,11 @@ jobs:
           python -m pip install -r requirements-prod.lock
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client
+      - name: Authenticate to encrypted production backup storage with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.LEDGER_BACKUP_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.LEDGER_BACKUP_AWS_REGION }}
       - name: Stage production without assigning any live domain
         id: stage
         run: |
@@ -58,7 +64,10 @@ jobs:
           url="$(vercel deploy --prebuilt --prod --skip-domain)"
           URL="$url" python -c 'import os,urllib.parse;u=urllib.parse.urlparse(os.environ["URL"]);assert u.scheme=="https" and u.hostname and u.hostname.endswith(".vercel.app")'
           echo "url=$url" >> "$GITHUB_OUTPUT"
-      - name: Back up and migrate production PostgreSQL before promotion
+      - name: Back up to KMS-encrypted storage and migrate before promotion
+        env:
+          LEDGER_BACKUP_S3_URI: ${{ vars.LEDGER_BACKUP_S3_URI }}
+          LEDGER_BACKUP_KMS_KEY_ID: ${{ vars.LEDGER_BACKUP_KMS_KEY_ID }}
         run: python scripts/production_migrate.py
       - name: Validate staged production API and build identity
         env:
