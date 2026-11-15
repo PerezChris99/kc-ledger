@@ -1,126 +1,106 @@
 # KC Ledger
 
-Private financial operations console for a solo freelance developer. KC Ledger records client engagements, invoices, payments, instalment plans and business events, then turns those records into explainable client-health scores and actionable financial intelligence.
+**Private-by-design financial operations console for a solo developer.** Tracks client health, engagements, invoices, payments, instalment plans, cash flow, expenses, time entries, financial targets and an append-only audit history.
 
-> **Private application.** Do not expose it to the public internet without a reviewed deployment and access-control plan. Do not use the fictional demo records as real financial data.
+> This software is proprietary. Its GitHub repository visibility must be configured separately from its application authentication and copyright license. Do not bind the local server to a public network.
 
-## What it does
+## Technology
 
-- **Financial dashboard** — collected revenue, outstanding and overdue balances, expenses, receivables aging, invoice status and client revenue concentration.
-- **Client intelligence** — explainable 0–100 score across eight factors, penalties, payment history and audit timeline.
-- **Invoices and payments** — invoice lifecycle, payment recording, transactional FIFO allocation and score recalculation.
-- **Instalment plans** — generated schedules with Perfect, Late, In progress, At risk and Broken verdicts.
-- **Avoid dossiers** — low-scoring or blacklisted clients with recorded risk flags.
-- **Audit trail** — append-only event history for financial and relationship events.
-- **Persistent widgets** — clock, due-date calendar, currency converter and target tracker.
-- **PWA** — installable shell with static-asset caching; financial API responses are not cached offline.
-- **Background jobs** — instalment state transitions, reminders, communication-silence signals, recurring retainer drafts and optional FX refresh.
-
-## Stack
-
-| Layer | Technology |
+| Layer | Stack |
 |---|---|
-| Backend | Django 5.2, Django Ninja |
-| Database | SQLite with WAL, foreign keys and busy timeout |
-| Frontend | React 18, TypeScript, Vite |
-| Server state | TanStack Query v5 |
-| Forms | React Hook Form, Zod and native validated forms |
-| Charts | Chart.js 4 / react-chartjs-2 |
-| UI | Custom Terminal Ledger tokens, shadcn/Radix primitives |
-| Jobs | APScheduler |
-| PWA | vite-plugin-pwa / Workbox |
-| Runtime | Docker Compose, Gunicorn, nginx |
+| Frontend | React 18, TypeScript, Vite 8, TanStack Query, Chart.js |
+| Styling | KC light-paper design tokens, navy `#0B1B3D`, cyan `#2CB4E8`, gold `#D7A72A` |
+| API | Django 5.2, Django Ninja, cookie-based staff authentication and CSRF |
+| Database | SQLite WAL, foreign keys, migrations, transactional allocation, soft deletion |
+| Scheduled jobs | APScheduler (single instance only) |
+| PDF reports | ReportLab (no GTK/Cairo dependency) |
+| Browser runtime | nginx, Gunicorn, Docker Compose (localhost-bound) |
+| Windows runtime | Python/Waitress, pywebview with WebView2, PyInstaller, Inno Setup |
+| Quality gates | pytest, Ruff, TypeScript, ESLint, dependency audits, Chromium Playwright, Windows packaged executable smoke |
 
-## Architecture
+## System flow
 
 ```mermaid
-flowchart TD
-  Browser[React PWA] -->|Same-origin JSON| Nginx[nginx]
-  Nginx --> Django[Django + Django Ninja]
-  Django --> Services[Scoring · FIFO · Cashflow · FX · Targets]
-  Django --> Jobs[APScheduler]
-  Django --> DB[(SQLite WAL)]
-  Services --> DB
-  Jobs --> DB
+flowchart LR
+  A[Owner signs in] --> B[React financial console]
+  B --> C[Same-origin Django Ninja API]
+  C --> D[Transactions and financial services]
+  D --> E[(SQLite WAL)]
+  C --> F[Append-only audit events]
+  G[One APScheduler instance] --> E
+  C --> H[ReportLab PDF exports]
 ```
 
-Financial data has one source of truth: the server database. Client detail is served as a view-shaped response, scoring functions are deterministic and side-effect free, and meaningful changes create audit events.
+### Windows desktop flow
 
-## Quick start
-
-1. Copy `.env.example` to `.env`.
-2. Before starting, set:
-   - `DJANGO_SECRET_KEY` to a random secret of at least 40 characters.
-   - `LEDGER_USERNAME` to the private owner username.
-   - `LEDGER_PASSWORD` to a unique password of at least 16 characters.
-   - `DJANGO_ALLOWED_HOSTS` to the intended hostnames.
-   - `COOKIE_SECURE=1` when HTTPS terminates in front of the app.
-3. Build and start the stack:
-
-   ```bash
-   docker compose up --build -d
-   docker compose logs -f api
-   ```
-
-4. Open [http://localhost:8080](http://localhost:8080). The initial owner account is created from the environment on first startup. Its password is not reset on subsequent starts.
-5. For a fictional local dataset only:
-
-   ```bash
-   docker compose exec api python manage.py seed_demo
-   ```
-
-The first startup applies the checked-in Django migrations and collects static files. Never commit `.env`, the SQLite volume, backup files or real client data.
-
-## Local development
-
-Backend:
-
-```bash
-python -m venv .venv
-# Activate the virtual environment, then:
-pip install -e ".[dev]"
-python backend/manage.py migrate
-python backend/manage.py runserver
+```mermaid
+flowchart LR
+  I[KC Ledger.exe] --> M[Per-user app data and backup]
+  I --> L[Local Django + Waitress]
+  I --> W[Native WebView2 window]
+  W -->|127.0.0.1 only| L
+  L --> M
 ```
 
-Frontend:
+## Run locally in a browser
 
-```bash
-npm install
-npm run dev
+This route requires Docker Desktop, not the Windows installer.
+
+1. Copy `.env.example` to `.env` and set a unique `DJANGO_SECRET_KEY` (40+ characters), `LEDGER_USERNAME` and `LEDGER_PASSWORD` (16+ characters). Keep the file out of Git.
+2. Run `docker compose up --build -d`.
+3. Open **http://localhost:8080**. The first owner is created from your environment. Subsequent restarts do not reset their password.
+
+Use `docker compose logs -f api` for startup issues. Only seed fictional data when explicitly testing: `docker compose exec api python manage.py seed_demo`.
+
+## Windows installer and native desktop
+
+The source includes `desktop/main.py`, a Windows build script and an Inno Setup installer specification. The packaged runtime keeps the database, signing key, logs and backups in `%LOCALAPPDATA%\\KCLedger`, outside the installation folder. It binds its web server only to `127.0.0.1`; normal use needs neither Node.js nor Docker. A first-run owner setup dialog creates the credentials.
+
+**Build on a Windows build host with Python 3.12, Node.js 22, Inno Setup 6:**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File desktop\build_windows.ps1
 ```
 
-Vite serves the frontend on port 5173 and proxies `/api` to `http://127.0.0.1:8000`.
+The builder runs `npm ci`, creates the Vite build, packages Python with PyInstaller, verifies Microsoft's signed WebView2 prerequisite, and invokes Inno Setup. Clean-Windows installation, restart, uninstall, native WebView2 interaction and code signing must be verified separately before distributing this as a production release. Details: [Windows desktop guide](docs/23-windows-desktop.md).
 
-## Validation
+## Validation and CI
 
 ```bash
-pytest
+python -m pip install -e ".[dev]"
+DJANGO_SECRET_KEY=<your-unique-secret> pytest -q
 ruff check backend
+ruff format --check backend
+npm ci
 npm run lint
+npm run typecheck
 npm run build
+npx playwright test
 ```
 
-Run desktop and mobile smoke tests after code changes. Main is not considered release-ready until backend tests, lint, frontend production build, manual route checks and backup/restore verification pass in an environment with the required dependencies.
+GitHub Actions checks backend, frontend, Docker, Chromium browser journeys, npm/Python advisories and Windows packaging. Python hashes are committed in `requirements-linux.lock` (dev+tests) and `requirements-prod.lock` (production); npm dependencies are in `package-lock.json`. **A compiled installer is not equivalent to a verified clean-Windows installation.** Inspect the latest CI run before release. No release should be tagged until the complete release checklist passes.
 
-## Backup and recovery
+## Backups and restore
 
-Create a consistent SQLite backup:
+Create a consistent, integrity-checked SQLite backup:
 
 ```bash
 docker compose exec api python manage.py backup_ledger
 ```
 
-Backups are integrity-checked and the newest 14 daily backup files are retained. Keep a copy outside the host and periodically test restoring it. See [troubleshooting](docs/20-troubleshooting.md).
+For a restore, first stop all application processes and work on a copy of your database. Validate the snapshot with `python backend/manage.py restore_ledger /path/to/backup.sqlite3`, then apply with `--apply --confirm RESTORE-LEDGER`. Every applied restore takes a pre-restore safety backup. Configure `LEDGER_SECONDARY_BACKUP_DIR` for another destination and confirm the destination can be restored.
 
 ## Documentation
 
-Start with the [canonical master specification](docs/00-master-spec.md), then read [setup](docs/01-setup.md), [architecture](docs/02-architecture.md), [data model](docs/03-data-model.md), [scoring](docs/05-scoring-engine.md), [instalments](docs/06-instalment-engine.md), [API](docs/07-api.md) and [version control](docs/18-version-control.md).
+- [Master product specification](docs/00-master-spec.md)
+- [Architecture](docs/02-architecture.md)
+- [Data model](docs/03-data-model.md)
+- [Security and production verification checklist](docs/21-production-readiness.md)
+- [Windows desktop design](docs/22-desktop-app.md)
+- [Windows build, installer and recovery](docs/23-windows-desktop.md)
 
-## Version control
+## Development workflow and license
 
-Two branches only: `perez` for development and `main` for deployable work. No CI workflows. See [the workflow contract](docs/18-version-control.md).
+Commit on `perez`, review CI, open a PR and merge into `main`, then fast-forward `perez`. Keep commit authorship and history intact.
 
-## License
-
-Private. Not for redistribution. See [LICENSE](LICENSE).
+Copyright © 2026 KC. Proprietary source; see [LICENSE](LICENSE).
