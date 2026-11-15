@@ -37,7 +37,10 @@ def _postgres_database(environ):
         if parsed.scheme not in {"postgres", "postgresql"} or not parsed.hostname:
             raise RuntimeError("DATABASE_URL must be a valid PostgreSQL URL.")
         if environ.get("LEDGER_DEPLOYMENT") == "vercel" and parsed.hostname in {
-            "localhost", "127.0.0.1", "::1", "db"
+            "localhost",
+            "127.0.0.1",
+            "::1",
+            "db",
         }:
             raise RuntimeError("Vercel cannot use local PostgreSQL.")
         if environ.get("LEDGER_DEPLOYMENT") == "vercel" and not parsed.query.count("sslmode="):

@@ -2,7 +2,6 @@
 
 import importlib.util
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -17,9 +16,12 @@ def test_version_prevents_downgrade_and_rejects_malformed():
 
 def test_manifest_rejects_untrusted_installer_url():
     manifest = {
-        "version": "1.2.3", "channel": "stable", "min_supported_version": "1.2.0",
+        "version": "1.2.3",
+        "channel": "stable",
+        "min_supported_version": "1.2.0",
         "installer_url": "https://evil.example/malware.exe",
-        "sha256": "a" * 64, "rollout_percent": 100,
+        "sha256": "a" * 64,
+        "rollout_percent": 100,
     }
     with pytest.raises(ValueError, match="pinned GitHub"):
         updater.validate_manifest(manifest)

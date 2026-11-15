@@ -3,16 +3,12 @@
 from unittest.mock import patch
 
 import pytest
-from django.test import override_settings
-
 from config.version import build_info
 
 
 def test_build_identity_uses_canonical_version():
     info = build_info()
-    assert set(info) == {
-        "version", "git_sha", "build_time", "channel", "min_supported_version"
-    }
+    assert set(info) == {"version", "git_sha", "build_time", "channel", "min_supported_version"}
     assert info["version"] == "0.1.0"
 
 
@@ -31,10 +27,13 @@ def test_cron_refuses_unauthenticated_requests(client, monkeypatch):
     monkeypatch.setenv("CRON_SECRET", "Z" * 44)
     with patch("ledger.cron_views.jobs.refresh_fx_rates") as fx:
         assert client.get("/api/internal/cron/daily").status_code == 403
-        assert client.get(
-            "/api/internal/cron/daily",
-            HTTP_AUTHORIZATION="Bearer incorrect",
-        ).status_code == 403
+        assert (
+            client.get(
+                "/api/internal/cron/daily",
+                HTTP_AUTHORIZATION="Bearer incorrect",
+            ).status_code
+            == 403
+        )
     fx.assert_not_called()
 
 

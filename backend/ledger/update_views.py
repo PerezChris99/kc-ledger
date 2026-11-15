@@ -3,10 +3,8 @@
 import os
 
 from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_protect
-
-from ledger.security import staff_session_auth
+from django.views.decorators.http import require_http_methods
 
 
 @csrf_protect

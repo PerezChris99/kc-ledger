@@ -34,16 +34,16 @@ def latest(request, channel="stable"):
             if not manifest:
                 continue
             url = manifest.get("browser_download_url", "")
-            if not url.startswith(
-                "https://github.com/PerezChris99/kc-ledger/releases/download/"
-            ):
+            if not url.startswith("https://github.com/PerezChris99/kc-ledger/releases/download/"):
                 continue
             with urlopen(Request(url, headers={"User-Agent": "KCLedger"}), timeout=8) as body:
                 payload = body.read(16385)
             if len(payload) > 16384:
                 break
             obj = json.loads(payload)
-            if obj.get("channel") != channel or obj.get("version") != release["tag_name"].removeprefix("v"):
+            if obj.get("channel") != channel or obj.get("version") != release[
+                "tag_name"
+            ].removeprefix("v"):
                 break
             reply = JsonResponse(obj)
             reply["Cache-Control"] = "public, max-age=120"

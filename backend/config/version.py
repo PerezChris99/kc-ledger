@@ -24,7 +24,9 @@ def build_info():
     # Environment metadata is nonsecret: Vercel can provide commit sha at runtime.
     sha = os.environ.get("VERCEL_GIT_COMMIT_SHA", os.environ.get("GITHUB_SHA", "unknown"))
     channel = info.get("channel", os.environ.get("LEDGER_RELEASE_CHANNEL", "stable"))
-    minimum = info.get("min_supported_version", os.environ.get("LEDGER_MIN_SUPPORTED_VERSION", version))
+    minimum = info.get(
+        "min_supported_version", os.environ.get("LEDGER_MIN_SUPPORTED_VERSION", version)
+    )
     if channel not in {"stable", "beta"}:
         raise RuntimeError("Invalid KC Ledger release channel")
     if not re.fullmatch(r"\d+\.\d+\.\d+", minimum):
