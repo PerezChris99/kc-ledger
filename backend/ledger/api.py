@@ -4,6 +4,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.db import transaction, IntegrityError
 from django.db.models import Sum
 from django.middleware.csrf import get_token
+from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect
 from django.utils import timezone
 from ninja import Router, Schema
@@ -224,7 +225,7 @@ def auth_login(request, payload: LoginIn):
 
     clear_login_throttle(key)
     login(request, user)
-    return {"authenticated": True, "username": user.get_username()}
+    return JsonResponse({"authenticated": True, "username": user.get_username()})
 
 
 @router.post("/auth/logout")
@@ -506,21 +507,6 @@ def record_payment(request, payload: PaymentIn):
     return {"payment_id": payment.id, "invoice_status": inv.status, "score": score.score,
         "allocation": [{"instalment_id": a["instalment_id"], "amount": str(a["amount"])} for a in allocation["allocations"]],
         "unallocated": str(allocation["unallocated"])}
-
-@router.get("/plans")
-def list_plans(request):
-    items = []
-    for inv in Invoice.objects.select_related("client").prefetch_related("instalments").all():
-        rows = list(inv.instalments.all())
-        if not rows:
-            continue
-        verdict = evaluate_plan_verdict([{"due_date": r.due_date, "paid_on": r.paid_on, "status": r.status,
-            "grace_days": r.grace_days, "amount": r.amount} for r in rows])
-        items.append({"invoice_id": inv.id, "invoice_number": inv.number, "client_id": inv.client_id,
-            "client_name": inv.client.name, "verdict": verdict, "instalments": [{"id": r.id, "seq": r.seq,
-            "label": r.label, "amount": str(r.amount), "due_date": r.due_date.isoformat(), "grace_days": r.grace_days, "status": r.status,
-            "paid_on": r.paid_on.isoformat() if r.paid_on else None} for r in rows]})
-    return {"items": items}
 
 @router.get("/engagements")
 def list_engagements(request, client_id: int | None = None, status: str = "", limit: int = 100):

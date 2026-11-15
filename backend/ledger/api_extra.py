@@ -8,6 +8,7 @@ from ninja import Router, Schema
 from ninja.errors import HttpError
 from ledger.models import Client, Engagement, Event, Expense, FxRate, Instalment, Invoice, Meta, Payment, PaymentAllocation, PlanMeta, Target, TimeEntry
 from ledger.validation import amount_cents, currency_code
+from ledger.services.instalments import evaluate_plan_verdict
 
 router = Router()
 
@@ -323,6 +324,21 @@ class PlanIn(Schema):
     invoice_id: int
     instalments: list[InstalmentRowIn]
     notes: str = ""
+
+@router.get("/plans")
+def list_plans(request):
+    items = []
+    for inv in Invoice.objects.select_related("client").prefetch_related("instalments").all():
+        rows = list(inv.instalments.all())
+        if not rows:
+            continue
+        verdict = evaluate_plan_verdict([{"due_date": r.due_date, "paid_on": r.paid_on, "status": r.status,
+            "grace_days": r.grace_days, "amount": r.amount} for r in rows])
+        items.append({"invoice_id": inv.id, "invoice_number": inv.number, "client_id": inv.client_id,
+            "client_name": inv.client.name, "verdict": verdict, "instalments": [{"id": r.id, "seq": r.seq,
+            "label": r.label, "amount": str(r.amount), "due_date": r.due_date.isoformat(), "grace_days": r.grace_days, "status": r.status,
+            "paid_on": r.paid_on.isoformat() if r.paid_on else None} for r in rows]})
+    return {"items": items}
 
 @router.post("/plans")
 def create_plan(request, payload: PlanIn):
