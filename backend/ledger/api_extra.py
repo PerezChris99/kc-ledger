@@ -200,6 +200,49 @@ def create_target(request, payload: TargetIn):
         title=f"Target created: {target.name}", detail=f"Deadline {target.deadline.isoformat()}.", occurred_at=timezone.now())
     return {"id": target.id, "name": target.name}
 
+
+@router.patch("/targets/{target_id}")
+def update_target(request, target_id: int, payload: TargetIn):
+    if payload.amount <= 0 or payload.type not in {"revenue", "clients", "hours"}:
+        raise HttpError(422, "Target type or amount is invalid.")
+    currency = payload.currency.upper()
+    if len(currency) != 3 or not currency.isalpha():
+        raise HttpError(422, "Currency must be a three-letter code.")
+    with transaction.atomic():
+        target = Target.objects.select_for_update().filter(pk=target_id).first()
+        if target is None:
+            raise HttpError(404, "Target not found.")
+        target.name = payload.name.strip()
+        target.type = payload.type
+        target.amount = payload.amount
+        target.currency = currency
+        target.deadline = payload.deadline
+        target.full_clean()
+        target.save()
+        Event.objects.create(
+            kind="target_updated", category=Event.Category.RELATIONSHIP, polarity=0,
+            title=f"Target updated: {target.name}",
+            detail=f"Target {target.pk} updated. Deadline {target.deadline.isoformat()}.",
+            occurred_at=timezone.now(),
+        )
+    return {"id": target.id, "name": target.name}
+
+
+@router.delete("/targets/{target_id}")
+def archive_target(request, target_id: int):
+    with transaction.atomic():
+        target = Target.objects.select_for_update().filter(pk=target_id).first()
+        if target is None:
+            raise HttpError(404, "Target not found.")
+        Event.objects.create(
+            kind="target_archived", category=Event.Category.RELATIONSHIP, polarity=0,
+            title=f"Target archived: {target.name}",
+            detail=f"Target {target.pk} archived.", occurred_at=timezone.now(),
+        )
+        target.delete()
+    return {"archived": True, "id": target_id}
+
+
 @router.get("/fx/convert")
 def convert_fx(request, amount: Decimal, base: str, quote: str):
     base, quote = base.upper(), quote.upper()
