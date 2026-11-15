@@ -86,7 +86,7 @@ export default function App() {
     <aside className="sidebar">
       <a className="wordmark" href="/" onClick={e=>{e.preventDefault();setActive("dashboard");}} aria-label="KC Ledger home"><span className="wordmark-symbol">KC</span><span className="wordmark-copy">KC LEDGER<small>FINANCIAL OPERATIONS</small></span></a>
       <div className="sidebar-label">WORKSPACE</div>
-      <nav aria-label="Main navigation">{nav.map(item=>{const Icon=item.icon;return <button key={item.id} className={active===item.id?"nav-item active":"nav-item"} onClick={()=>setActive(item.id)} aria-current={active===item.id?"page":undefined}><Icon size={17} strokeWidth={1.8}/><span>{item.label}</span>{item.id==="avoid"&&<span className="nav-count">!</span>}</button>;})}</nav>
+      <nav aria-label="Main navigation">{nav.map(item=>{const Icon=item.icon;return <button key={item.id} className={active===item.id?"nav-item active":"nav-item"} onClick={()=>setActive(item.id)} aria-current={active===item.id?"page":undefined}><Icon size={17} strokeWidth={1.8}/><span>{item.label}</span>{item.id==="avoid"&&<span className="nav-count" aria-hidden="true">!</span>}</button>;})}</nav>
       <div className="sidebar-bottom"><div className="sidebar-label">TARGET TRACKER</div><TargetTracker/><button className="nav-item" onClick={()=>setActive("settings")}><Settings2 size={17}/><span>Settings</span></button><div className="privacy-note"><span className="status-dot"/><span>PRIVATE WORKSPACE</span></div></div>
     </aside>
     {moreOpen&&<div className="mobile-more-menu">{nav.slice(4).map(item=><button key={item.id} onClick={()=>{setActive(item.id);setMoreOpen(false);}}>{item.label}</button>)}</div>}
