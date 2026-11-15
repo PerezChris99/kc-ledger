@@ -7,6 +7,7 @@ from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from ledger.models import Client, Engagement, Event, Expense, FxRate, Instalment, Invoice, Meta, Payment, PaymentAllocation, PlanMeta, Target, TimeEntry
+from ledger.validation import amount_cents, currency_code
 
 router = Router()
 
@@ -187,8 +188,7 @@ def list_targets(request):
 
 @router.post("/targets")
 def create_target(request, payload: TargetIn):
-    if payload.amount <= 0:
-        raise HttpError(422, "Target amount must be positive.")
+    amount_cents(payload.amount, "Target amount")
     if payload.type not in {"revenue", "clients", "hours"}:
         raise HttpError(422, "Unsupported target type.")
     values = payload.dict()
@@ -203,8 +203,9 @@ def create_target(request, payload: TargetIn):
 
 @router.patch("/targets/{target_id}")
 def update_target(request, target_id: int, payload: TargetIn):
-    if payload.amount <= 0 or payload.type not in {"revenue", "clients", "hours"}:
-        raise HttpError(422, "Target type or amount is invalid.")
+    amount_cents(payload.amount, "Target amount")
+    if payload.type not in {"revenue", "clients", "hours"}:
+        raise HttpError(422, "Target type is invalid.")
     currency = payload.currency.upper()
     if len(currency) != 3 or not currency.isalpha():
         raise HttpError(422, "Currency must be a three-letter code.")
@@ -331,7 +332,9 @@ def create_plan(request, payload: PlanIn):
     sequences = [item.seq for item in rows]
     if any(seq < 1 for seq in sequences) or len(set(sequences)) != len(sequences):
         raise HttpError(422, "Instalment sequence numbers must be unique positive integers.")
-    if any(item.amount <= 0 or item.grace_days < 0 or item.grace_days > 60 for item in rows):
+    for item in rows:
+        amount_cents(item.amount, "Instalment amount")
+    if any(item.grace_days < 0 or item.grace_days > 60 for item in rows):
         raise HttpError(422, "Amounts must be positive and grace periods must be between 0 and 60 days.")
     if any(rows[index].due_date > rows[index + 1].due_date for index in range(len(rows)-1)):
         raise HttpError(422, "Instalment dates must be chronological.")
@@ -496,7 +499,9 @@ def update_plan(request, invoice_id: int, payload: PlanIn):
     sequences = [item.seq for item in rows]
     if any(seq < 1 for seq in sequences) or len(set(sequences)) != len(sequences):
         raise HttpError(422, "Instalment sequence numbers must be unique positive integers.")
-    if any(item.amount <= 0 or item.grace_days < 0 or item.grace_days > 60 for item in rows):
+    for item in rows:
+        amount_cents(item.amount, "Instalment amount")
+    if any(item.grace_days < 0 or item.grace_days > 60 for item in rows):
         raise HttpError(422, "Amounts must be positive and grace periods must be between 0 and 60 days.")
     if any(rows[index].due_date > rows[index + 1].due_date for index in range(len(rows)-1)):
         raise HttpError(422, "Instalment dates must be chronological.")

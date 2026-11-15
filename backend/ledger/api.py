@@ -10,6 +10,7 @@ from ninja.errors import HttpError
 from ledger.models import Client, Engagement, Event, Expense, FxRate, Instalment, Invoice, Payment, PaymentAllocation, PlanMeta, TimeEntry
 from ledger.services.instalments import allocate_payment_fifo, evaluate_plan_verdict
 from ledger.services.scoring import compute_client_score
+from ledger.validation import amount_cents, currency_code
 
 router = Router()
 
@@ -254,11 +255,15 @@ def list_clients(request, q: str = "", status: str = "", limit: int = 50, offset
 def create_client(request, payload: ClientIn):
     if payload.status not in Client.Status.values:
         raise HttpError(422, "Unsupported client status.")
+    if not payload.name.strip() or len(payload.name.strip()) > 160:
+        raise HttpError(422, "Client name must contain 1–160 characters.")
     values = payload.dict()
+    values["name"] = payload.name.strip()
     values["currency"] = values["currency"].upper()
     if len(values["currency"]) != 3 or not values["currency"].isalpha():
         raise HttpError(422, "Currency must be a three-letter code.")
-    client = Client.objects.create(**values)
+    with transaction.atomic():
+        client = Client.objects.create(**values)
     Event.objects.create(client=client, kind="client_created", category=Event.Category.RELATIONSHIP,
         polarity=0, title="Client created", detail="Client record created.", occurred_at=timezone.now())
     result = _refresh_score(client)
@@ -367,14 +372,12 @@ def list_invoices(request, status: str = "", q: str = "", limit: int = 50, offse
 
 @router.post("/invoices")
 def create_invoice(request, payload: InvoiceIn):
-    if payload.amount <= 0:
-        raise HttpError(422, "Invoice amount must be positive.")
+    amount_cents(payload.amount, "Invoice amount")
     if payload.due_date < payload.issue_date:
         raise HttpError(422, "Invoice due date cannot precede issue date.")
     if payload.status not in {Invoice.Status.DRAFT, Invoice.Status.SENT, Invoice.Status.DISPUTED}:
         raise HttpError(422, "New invoices must be draft, sent, or disputed.")
-    if len(payload.currency) != 3 or not payload.currency.isalpha():
-        raise HttpError(422, "Currency must be a three-letter code.")
+    currency_code(payload.currency)
     try:
         client = Client.objects.get(pk=payload.client_id)
     except Client.DoesNotExist:
@@ -438,8 +441,7 @@ def update_invoice(request, invoice_id: int, payload: InvoicePatch):
 
 @router.post("/payments")
 def record_payment(request, payload: PaymentIn):
-    if payload.amount <= 0:
-        raise HttpError(422, "Payment amount must be positive.")
+    amount_cents(payload.amount, "Payment amount")
     if payload.paid_on > timezone.localdate():
         raise HttpError(422, "Payment date cannot be in the future.")
     with transaction.atomic():
@@ -463,6 +465,8 @@ def record_payment(request, payload: PaymentIn):
             paid_map = {x["instalment_id"]: x["total"] for x in existing}
             allocation = allocate_payment_fifo([{"id": r.id, "seq": r.seq, "due_date": r.due_date,
                 "amount": r.amount, "allocated": paid_map.get(r.id, Decimal("0")), "status": r.status} for r in rows], payload.amount)
+            if allocation["unallocated"] != Decimal("0"):
+                raise HttpError(422, "Payment cannot exceed remaining instalment schedule balance.")
             for item in allocation["allocations"]:
                 PaymentAllocation.objects.create(payment=payment, instalment_id=item["instalment_id"], amount=item["amount"])
                 paid_map[item["instalment_id"]] = paid_map.get(item["instalment_id"], Decimal("0")) + item["amount"]
@@ -636,8 +640,7 @@ def list_expenses(request, client_id: int | None = None, limit: int = 100):
 
 @router.post("/expenses")
 def create_expense(request, payload: ExpenseIn):
-    if payload.amount <= 0:
-        raise HttpError(422, "Expense amount must be positive.")
+    amount_cents(payload.amount, "Expense amount")
     if not payload.category.strip():
         raise HttpError(422, "Expense category is required.")
     client = None
