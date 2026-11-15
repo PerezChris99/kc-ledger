@@ -8,7 +8,7 @@
 
 | Layer | Stack |
 |---|---|
-| Frontend | React 18, TypeScript, Vite 8, TanStack Query, Chart.js |
+| Frontend | React 18, JavaScript (JSX), Vite 8, TanStack Query, Chart.js |
 | Styling | KC light-paper design tokens, navy `#0B1B3D`, cyan `#2CB4E8`, gold `#D7A72A` |
 | API | Django 5.2, Django Ninja, cookie-based staff authentication and CSRF |
 | Database | SQLite WAL, foreign keys, migrations, transactional allocation, soft deletion |
@@ -16,7 +16,7 @@
 | PDF reports | ReportLab (no GTK/Cairo dependency) |
 | Browser runtime | nginx, Gunicorn, Docker Compose (localhost-bound) |
 | Windows runtime | Python/Waitress, pywebview with WebView2, PyInstaller, Inno Setup |
-| Quality gates | pytest, Ruff, TypeScript, ESLint, dependency audits, Chromium Playwright, Windows packaged executable smoke |
+| Quality gates | pytest, Ruff, JavaScript (JSX), ESLint, dependency audits, Chromium Playwright, Windows packaged executable smoke |
 
 ## System flow
 
@@ -73,7 +73,6 @@ ruff check backend
 ruff format --check backend
 npm ci
 npm run lint
-npm run typecheck
 npm run build
 npx playwright test
 ```

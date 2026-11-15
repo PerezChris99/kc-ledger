@@ -1,15 +1,24 @@
-import tsParser from "@typescript-eslint/parser";
-import tsPlugin from "@typescript-eslint/eslint-plugin";
+import react from "eslint-plugin-react";
+import globals from "globals";
 
 export default [{
-  files: ["frontend/**/*.{ts,tsx}"],
+  files: ["frontend/**/*.{js,jsx}", "e2e/**/*.js", "vite.config.js", "playwright.config.js"],
   languageOptions: {
-    parser: tsParser,
-    parserOptions: { ecmaVersion: "latest", sourceType: "module", ecmaFeatures: { jsx: true } }
+    ecmaVersion: "latest",
+    sourceType: "module",
+    globals: { ...globals.browser, ...globals.node },
+    parserOptions: { ecmaFeatures: { jsx: true } },
   },
-  plugins: { "@typescript-eslint": tsPlugin },
+  plugins: { react },
+  settings: { react: { version: "detect" } },
   rules: {
-    "no-unused-vars": "off",
-    "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }]
-  }
+    "react/jsx-uses-vars": "error",
+    "react/jsx-uses-react": "error",
+    "no-unused-vars": ["error", {
+      argsIgnorePattern: "^_",
+      varsIgnorePattern: "^_",
+      caughtErrors: "none",
+      ignoreRestSiblings: true,
+    }],
+  },
 }];
