@@ -6,6 +6,7 @@ from decimal import Decimal
 import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from ledger.models import Client, FxRate, Invoice
 from ledger.services.fx import conversion_for
@@ -13,7 +14,7 @@ from ledger.services.fx import conversion_for
 
 @pytest.mark.django_db
 def test_fx_converter_uses_single_query_for_many_values():
-    FxRate.objects.create(base="USD", quote="UGX", rate=Decimal(3700))
+    FxRate.objects.create(base="USD", quote="UGX", rate=Decimal(3700), fetched_at=timezone.now())
     with CaptureQueriesContext(connection) as queries:
         convert = conversion_for("USD")
         amounts = [convert(Decimal(3700), "UGX") for _ in range(80)]
@@ -23,7 +24,7 @@ def test_fx_converter_uses_single_query_for_many_values():
 
 @pytest.mark.django_db
 def test_dashboard_fx_queries_are_independent_of_invoice_count(staff_client):
-    FxRate.objects.create(base="USD", quote="UGX", rate=Decimal(3700))
+    FxRate.objects.create(base="USD", quote="UGX", rate=Decimal(3700), fetched_at=timezone.now())
     customer = Client.objects.create(name="FX load test")
     for number in range(25):
         Invoice.objects.create(
