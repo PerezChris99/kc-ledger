@@ -7,8 +7,8 @@ if ($version -ne "3.12") { throw "Python 3.12 is required; found $version" }
 if (!(Test-Path "package-lock.json")) { throw "package-lock.json is missing; generate and commit a lockfile" }
 npm ci
 if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
-npm run typecheck
-if ($LASTEXITCODE -ne 0) { throw "Frontend type checking failed" }
+npm run lint
+if ($LASTEXITCODE -ne 0) { throw "Frontend lint failed" }
 npm run build
 if ($LASTEXITCODE -ne 0) { throw "Vite build failed" }
 python -m pip install -e ".[desktop]"
