@@ -27,6 +27,15 @@ if ($LASTEXITCODE -ne 0) { throw "Desktop packaging failed" }
 $exe = "dist\KC Ledger\KC Ledger.exe"
 if (!(Test-Path $exe)) { throw "KC Ledger.exe was not produced" }
 Get-FileHash -Algorithm SHA256 $exe
+# Bundle Microsoft's signed Evergreen bootstrapper to install WebView2 if absent.
+$webviewBootstrapper = Join-Path $root 'desktop\MicrosoftEdgeWebView2Setup.exe'
+Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $webviewBootstrapper
+$signature = Get-AuthenticodeSignature -FilePath $webviewBootstrapper
+if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft') {
+  throw 'WebView2 bootstrapper is missing a valid Microsoft Authenticode signature'
+}
+Get-FileHash -Algorithm SHA256 $webviewBootstrapper
+
 if (Get-Command ISCC.exe -ErrorAction SilentlyContinue) {
   ISCC.exe desktop\KC-Ledger.iss
   if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }

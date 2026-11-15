@@ -41,3 +41,7 @@ The per-user installer does not delete user financial records on uninstall.
 - Record installer hashes and a release tag only after successful validation
 
 The browser deployment remains available through Docker Compose.
+
+## WebView2 installation prerequisite
+
+The Windows build downloads Microsoft's evergreen WebView2 bootstrapper, verifies its Authenticode signature, and bundles it with Inno Setup. On machines without a registered WebView2 runtime, installation invokes the signed Microsoft bootstrapper. That step requires internet access on the first install; for completely offline distribution the large Microsoft standalone Evergreen installer must be substituted and verified separately. The packaged KC Ledger app still requires no separately installed Python or Node.js.

@@ -21,6 +21,8 @@ ArchitecturesAllowed=x64
 [Files]
 Source: "..\dist\KC Ledger\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
+Source: "..\desktop\MicrosoftEdgeWebView2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+
 [Icons]
 Name: "{group}\KC Ledger"; Filename: "{app}\KC Ledger.exe"
 Name: "{autodesktop}\KC Ledger"; Filename: "{app}\KC Ledger.exe"; Tasks: desktopicon
@@ -29,4 +31,19 @@ Name: "{autodesktop}\KC Ledger"; Filename: "{app}\KC Ledger.exe"; Tasks: desktop
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [Run]
+Filename: "{tmp}\MicrosoftEdgeWebView2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "Installing Microsoft WebView2 Runtime..."; Check: not WebView2Installed
 Filename: "{app}\KC Ledger.exe"; Description: "Launch KC Ledger"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function WebView2Installed(): Boolean;
+var
+  Ver: string;
+begin
+  Result :=
+    (RegQueryStringValue(HKCU,
+      'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv', Ver) and (Ver <> '') and (Ver <> '0.0.0.0')) or
+    (RegQueryStringValue(HKLM,
+      'Software\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv', Ver) and (Ver <> '') and (Ver <> '0.0.0.0'));
+end;
