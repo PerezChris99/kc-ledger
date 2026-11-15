@@ -16,7 +16,6 @@ from ledger.models import (
     Engagement,
     Event,
     Expense,
-    FxRate,
     Instalment,
     Invoice,
     Payment,
@@ -24,9 +23,9 @@ from ledger.models import (
     PlanMeta,
     TimeEntry,
 )
+from ledger.services.fx import conversion_for
 from ledger.services.instalments import allocate_payment_fifo, evaluate_plan_verdict
 from ledger.services.scoring import compute_client_score
-from ledger.services.fx import conversion_for
 from ledger.validation import amount_cents, currency_code
 
 router = Router()

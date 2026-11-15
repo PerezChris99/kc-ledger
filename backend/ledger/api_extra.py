@@ -23,8 +23,8 @@ from ledger.models import (
     Target,
     TimeEntry,
 )
-from ledger.services.instalments import evaluate_plan_verdict
 from ledger.services.fx import conversion_for
+from ledger.services.instalments import evaluate_plan_verdict
 from ledger.validation import amount_cents, currency_code
 
 router = Router()

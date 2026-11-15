@@ -1,4 +1,5 @@
 """Request-scoped FX lookup: one SQL query instead of per-invoice queries."""
+
 from django.db.models import Q
 
 from ledger.models import FxRate
