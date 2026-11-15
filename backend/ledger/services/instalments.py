@@ -1,6 +1,7 @@
+from collections.abc import Iterable
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any, Iterable
+from typing import Any
 
 ZERO = Decimal("0.00")
 VERDICT_WEIGHTS = {"perfect": 1.0, "late": 0.5, "in_progress": 0.7, "at_risk": 0.2, "broken": 0.0}
@@ -11,7 +12,9 @@ def allocate_payment_fifo(instalments: Iterable[dict[str, Any]], amount: Decimal
     remaining = Decimal(str(amount)).quantize(Decimal("0.01"))
     if remaining <= ZERO:
         raise ValueError("Payment amount must be positive.")
-    rows = sorted(instalments, key=lambda row: (row["due_date"], row.get("seq", 0), str(row.get("id", ""))))
+    rows = sorted(
+        instalments, key=lambda row: (row["due_date"], row.get("seq", 0), str(row.get("id", "")))
+    )
     allocations = []
     for row in rows:
         if row.get("status") in {"paid", "waived"}:
@@ -21,7 +24,9 @@ def allocate_payment_fifo(instalments: Iterable[dict[str, Any]], amount: Decimal
         balance = max(ZERO, scheduled - already_paid)
         allocated = min(balance, remaining)
         if allocated > ZERO:
-            allocations.append({"instalment_id": row.get("id"), "amount": allocated.quantize(Decimal("0.01"))})
+            allocations.append(
+                {"instalment_id": row.get("id"), "amount": allocated.quantize(Decimal("0.01"))}
+            )
             remaining -= allocated
         if remaining <= ZERO:
             break

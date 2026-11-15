@@ -1,5 +1,22 @@
 from django.contrib import admin
-from .models import Client, Engagement, Invoice, Instalment, PlanMeta, Payment, PaymentAllocation, Expense, Event, SignalType, TimeEntry, Target, FxRate, Meta
+
+from .models import (
+    Client,
+    Engagement,
+    Event,
+    Expense,
+    FxRate,
+    Instalment,
+    Invoice,
+    Meta,
+    Payment,
+    PaymentAllocation,
+    PlanMeta,
+    SignalType,
+    Target,
+    TimeEntry,
+)
+
 
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
@@ -8,11 +25,13 @@ class ClientAdmin(admin.ModelAdmin):
     search_fields = ("name", "company", "email")
     readonly_fields = ("score_updated_at", "created_at", "updated_at", "deleted_at")
 
+
 @admin.register(Engagement)
 class EngagementAdmin(admin.ModelAdmin):
     list_display = ("name", "client", "kind", "status", "agreed_amount", "currency")
     list_filter = ("kind", "status", "currency")
     search_fields = ("name", "client__name")
+
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
@@ -21,11 +40,13 @@ class InvoiceAdmin(admin.ModelAdmin):
     search_fields = ("number", "title", "client__name")
     readonly_fields = ("created_at", "updated_at", "deleted_at")
 
+
 @admin.register(Instalment)
 class InstalmentAdmin(admin.ModelAdmin):
     list_display = ("invoice", "seq", "label", "amount", "due_date", "status")
     list_filter = ("status", "due_date")
     search_fields = ("invoice__number", "client__name")
+
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
@@ -33,10 +54,12 @@ class PaymentAdmin(admin.ModelAdmin):
     list_filter = ("method", "paid_on")
     search_fields = ("invoice__number", "client__name", "reference")
 
+
 @admin.register(Expense)
 class ExpenseAdmin(admin.ModelAdmin):
     list_display = ("category", "amount", "currency", "spent_on", "client", "billable")
     list_filter = ("category", "billable", "currency", "spent_on")
+
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
@@ -53,6 +76,7 @@ class EventAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
 
 for model in (PlanMeta, PaymentAllocation, SignalType, TimeEntry, Target, FxRate, Meta):
     admin.site.register(model)

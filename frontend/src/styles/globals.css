@@ -1,21 +1,26 @@
 :root {
-  color-scheme: dark;
-  --bg: #0B0F14; --surface: #111820; --elevated: #161F2A; --input: #0D141C; --hover-row: #1B2530;
-  --border: #243140; --border-strong: #2F3F52;
-  --text: #E6EDF3; --text-secondary: #9AA7B4; --text-muted: #6B7A8A;
-  --primary: #58A6FF; --primary-hover: #79B8FF; --primary-surface: rgba(88,166,255,.12);
-  --primary-border-soft: rgba(88,166,255,.18); --primary-border: rgba(88,166,255,.35);
-  --success: #3FB950; --success-surface: rgba(63,185,80,.12); --success-border: rgba(63,185,80,.35); --success-border-soft: rgba(63,185,80,.3);
-  --danger: #F85149; --danger-surface: rgba(248,81,73,.12); --danger-border: rgba(248,81,73,.35); --danger-border-soft: rgba(248,81,73,.3); --danger-border-strong: rgba(248,81,73,.45);
-  --warning: #D29922; --warning-surface: rgba(210,153,34,.12); --warning-border: rgba(210,153,34,.4); --warning-border-soft: rgba(210,153,34,.35); --neutral-badge: #8B949E;
-  --surface-glass: rgba(17,24,32,.72); --shadow-backdrop: rgba(0,0,0,.5);
-  --chart-grid: #263241; --chart-revenue: #58A6FF; --chart-profit: #3FB950; --chart-loss: #F85149; --chart-forecast: #D29922;
-  --focus-ring: #58A6FF; --backdrop: rgba(0,0,0,.65);
-  --sidebar-bg: #0D1218;
-  --font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  font-family: var(--font-ui); color: var(--text); background: var(--bg); font-synthesis: none; text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+  --kc-navy: #0B1B3D; --kc-cyan: #2CB4E8; --kc-yellow: #F4C543; --kc-gold: #D7A72A;
+  --kc-white: #FFFFFF; --kc-paper: #F8F9FA; --kc-font-headings: "Montserrat", Inter, system-ui, sans-serif;
+  --kc-font-body: "Open Sans", Inter, system-ui, sans-serif;
+  --kc-radius-sm: 4px; --kc-radius-md: 8px; --kc-shadow-sm: 0 2px 5px rgba(11,27,61,.05);
+  --kc-shadow-md: 0 5px 18px rgba(11,27,61,.11);
+  --bg: var(--kc-paper); --surface: var(--kc-white); --elevated: #FFFFFF; --input: #F6F8FC; --hover-row: #EDF5F9;
+  --border: #E2E8F0; --border-strong: #CBD5E1;
+  --text: var(--kc-navy); --text-secondary: #475569; --text-muted: #64748B;
+  --primary: #087FAF; --primary-hover: #08658A; --primary-surface: rgba(44,180,232,.12);
+  --primary-border-soft: rgba(44,180,232,.2); --primary-border: rgba(44,180,232,.42);
+  --success: #16845B; --success-surface: rgba(22,132,91,.09); --success-border: rgba(22,132,91,.3); --success-border-soft: rgba(22,132,91,.22);
+  --danger: #C83D4D; --danger-surface: rgba(200,61,77,.09); --danger-border: rgba(200,61,77,.3);
+  --danger-border-soft: rgba(200,61,77,.22); --danger-border-strong: rgba(200,61,77,.42);
+  --warning: #946B00; --warning-surface: rgba(244,197,67,.22); --warning-border: rgba(148,107,0,.35);
+  --warning-border-soft: rgba(148,107,0,.24); --neutral-badge: #64748B;
+  --surface-glass: rgba(255,255,255,.94); --shadow-backdrop: rgba(11,27,61,.34);
+  --chart-grid: #E5EAF0; --chart-revenue: #0B1B3D; --chart-profit: #2CB4E8; --chart-loss: #C83D4D; --chart-forecast: #F4C543;
+  --focus-ring: #087FAF; --backdrop: rgba(11,27,61,.48); --sidebar-bg: var(--kc-navy);
+  --font-ui: var(--kc-font-body); --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-family: var(--font-ui); color: var(--text); background: var(--bg);
+  font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--bg); color: var(--text); font-size: 14px; }
@@ -463,3 +468,12 @@ a:hover { color: var(--kc-navy); }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Sidebar contrast and readable KC paper layout. */
+.sidebar .nav-item { color: rgba(255,255,255,.83); }
+.sidebar .nav-item:not(.active):hover { color: var(--kc-white); }
+.sidebar .nav-item svg { flex-shrink: 0; }
+.sidebar-bottom { color: rgba(255,255,255,.78); }
+.page-footer a { color: #087FAF; text-decoration: none; }
+.page-footer a:hover { text-decoration: underline; }
+@media print { .sidebar,.topbar,.mobile-more-button,.mobile-more-menu { display: none !important; } .main-area { width:100%; } }
