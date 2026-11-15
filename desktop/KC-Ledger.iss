@@ -26,6 +26,7 @@ Uninstallable=yes
 [Files]
 Source: "..\dist\KC Ledger\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\desktop\MicrosoftEdgeWebView2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "..\desktop\update-protocol-v1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\KC Ledger"; Filename: "{app}\KC Ledger.exe"
@@ -61,6 +62,13 @@ begin
   Upgrading := False;
   ProgramExe := ExpandConstant('{app}\KC Ledger.exe');
   if FileExists(ProgramExe) then begin
+    // Older KC Ledger binaries ignore --prepare-upgrade and would launch the
+    // regular GUI indefinitely. Refuse unverified in-place upgrades outright.
+    if not FileExists(ExpandConstant('{app}\update-protocol-v1')) then begin
+      Result := 'This installed KC Ledger predates the verified update protocol. ' +
+        'A migration-assisted legacy upgrade is required; no files were changed.';
+      Exit;
+    end;
     Upgrading := True;
     // A prior installation may predate the updater; it cannot safely run
     // migrations until a verified offline checkpoint exists. Fail closed.

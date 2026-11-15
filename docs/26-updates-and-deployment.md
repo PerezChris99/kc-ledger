@@ -50,6 +50,8 @@ The desktop updater reads the **bundled pinned certificate thumbprint**, not the
 
 ## Installer migration, recovery and known failure modes
 
+The installer first requires an `update-protocol-v1` support marker in the previously installed application. **Legacy builds lacking that marker are refused without running the old executable**, because they do not understand `--prepare-upgrade` and could otherwise hang. Existing records are retained; migrating from a legacy package requires a separately tested migration-assisted installation.
+
 On an in-place upgrade the old packaged application is invoked with `--prepare-upgrade` **before** Inno overwrites files. It copies the prior binary bundle to `%LOCALAPPDATA%\KCLedger\rollback\previous-program` and creates a verified PostgreSQL `pg_dump` or SQLite online backup. Missing PostgreSQL client tools, missing permissions or a failed backup **abort the upgrade**.
 
 After file replacement, Inno invokes `--post-upgrade-check` on the newly packaged backend. It migrates and checks the same pinned DB. If it fails, Inno calls `--restore-upgrade` on the protected database snapshot and copies saved previous binaries back. **A hard power loss or Windows crash mid-copy is not fully atomic**; inspect `%LOCALAPPDATA%\KCLedger\logs\update.log` and use the preserved backup and binaries. Never claim power-loss-proof atomicity from an Inno script alone. Test repeated/crashed upgrades on disposable real Windows 10/11 machines before distribution.

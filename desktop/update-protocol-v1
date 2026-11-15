@@ -1,0 +1,2 @@
+KC Ledger updater/installer compatibility protocol v1.
+Previous installers must implement --prepare-upgrade, --post-upgrade-check and --restore-upgrade with verified database and binary checkpoints.
