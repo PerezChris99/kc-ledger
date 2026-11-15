@@ -21,7 +21,6 @@ jobs:
       - name: Generate npm lockfile
         run: |
           npm install --package-lock-only --ignore-scripts --no-audit
-          npm audit fix --package-lock-only --ignore-scripts --audit-level=high
       - name: Generate Python Linux lockfile
         run: |
           python -m pip install pip-tools
