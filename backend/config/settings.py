@@ -1,15 +1,11 @@
 import os
-import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0").lower() in {"1", "true", "yes"}
 if not SECRET_KEY:
-    if DEBUG or "pytest" in sys.modules or "test" in sys.argv:
-        SECRET_KEY = "unsafe-development-only-change-me"
-    else:
-        raise RuntimeError("DJANGO_SECRET_KEY must be configured outside development mode.")
+    raise RuntimeError("DJANGO_SECRET_KEY must be configured outside explicit test/development setup.")
 if not DEBUG and (len(SECRET_KEY) < 40 or SECRET_KEY.startswith(("unsafe-", "replace-with-"))):
     raise RuntimeError("DJANGO_SECRET_KEY must be a unique random value of at least 40 characters.")
 
@@ -83,3 +79,6 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = COOKIE_SECURE
     SECURE_HSTS_PRELOAD = False
     SECURE_SSL_REDIRECT = COOKIE_SECURE
+
+LEDGER_LOGIN_MAX_ATTEMPTS = max(2, int(os.environ.get("LEDGER_LOGIN_MAX_ATTEMPTS", "5")))
+LEDGER_LOGIN_WINDOW_SECONDS = max(60, int(os.environ.get("LEDGER_LOGIN_WINDOW_SECONDS", "900")))

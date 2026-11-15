@@ -331,3 +331,12 @@ class FxRate(models.Model):
 class Meta(models.Model):
     key = models.CharField(max_length=120, primary_key=True)
     value = models.TextField()
+
+
+class LoginThrottle(models.Model):
+    """Persistent per-source-and-username login attempt counter."""
+    key = models.CharField(max_length=64, primary_key=True)
+    attempts = models.PositiveIntegerField(default=0)
+    window_started_at = models.DateTimeField()
+    locked_until = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)

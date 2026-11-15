@@ -16,7 +16,7 @@ dev = ["pytest>=8,<9", "pytest-django>=4.8,<5", "ruff>=0.6,<1"]
 packages = []
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings"
+DJANGO_SETTINGS_MODULE = "config.test_settings"
 python_files = ["test_*.py", "*_tests.py"]
 testpaths = ["backend"]
 pythonpath = ["backend"]
