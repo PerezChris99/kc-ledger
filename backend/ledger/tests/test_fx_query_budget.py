@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 from django.db import connection
+from django.utils import timezone
 from django.test.utils import CaptureQueriesContext
 
 from ledger.models import Client, FxRate, Invoice
