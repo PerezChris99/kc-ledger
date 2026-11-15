@@ -26,3 +26,17 @@ class ApiRequestLimitsMiddleware:
                 if length > self.MAX_JSON_BYTES:
                     return HttpResponse("Request body too large.", status=413)
         return self.get_response(request)
+
+
+class DatabaseCutoverGuardMiddleware:
+    """Fail closed before serving a legacy SQLite ledger against fresh PostgreSQL."""
+
+    def __init__(self, get_response):
+        from ledger.management.commands.check_db_transition import Command
+
+        # Runs once per server process, not on every request.
+        Command().handle()
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
