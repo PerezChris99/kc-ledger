@@ -71,9 +71,11 @@ class Command(BaseCommand):
         os.close(fd)
         staged = Path(temp)
         try:
-            with sqlite3.connect(str(backup), timeout=30) as src:
-                with sqlite3.connect(str(staged), timeout=30) as dest:
-                    src.backup(dest)
+            with (
+                sqlite3.connect(str(backup), timeout=30) as src,
+                sqlite3.connect(str(staged), timeout=30) as dest,
+            ):
+                src.backup(dest)
             check_integrity(staged)
             os.replace(staged, database)
             for suffix in ("-wal", "-shm"):

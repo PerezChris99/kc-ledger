@@ -220,7 +220,7 @@ def compute_client_score(snapshot: Mapping[str, Any], as_of: date | None = None)
             penalties.append({"key": key, "label": label, "points": round(amount, 2)})
     total_penalty = sum(float(item["points"]) for item in penalties)
     raw = sum(f.points for f in factors) - total_penalty
-    score = 0 if snapshot.get("status") == "blacklisted" else int(round(_clamp(raw, 0, 100)))
+    score = 0 if snapshot.get("status") == "blacklisted" else round(_clamp(raw, 0, 100))
     tier = (
         "Champion"
         if score >= 85
