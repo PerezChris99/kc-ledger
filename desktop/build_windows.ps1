@@ -15,13 +15,15 @@ python -m pip install -e ".[desktop]"
 if ($LASTEXITCODE -ne 0) { throw "Python desktop install failed" }
 $env:DJANGO_SECRET_KEY = "build-only-" + [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
 $env:DJANGO_DEBUG = "1"
+$env:LEDGER_DB_ENGINE = "sqlite"
 $env:LEDGER_DB_PATH = Join-Path $env:TEMP ("kc-ledger-build-" + [guid]::NewGuid().ToString("N") + ".sqlite3")
 python backend\manage.py collectstatic --noinput
 if ($LASTEXITCODE -ne 0) { throw "Collectstatic failed" }
 Remove-Item Env:\DJANGO_SECRET_KEY
 Remove-Item Env:\DJANGO_DEBUG
 Remove-Item Env:\LEDGER_DB_PATH
-$pkgArgs = @("--noconfirm","--clean","--windowed","--onedir","--name","KC Ledger","--paths","backend","--add-data","backend;backend","--add-data","dist;dist","--add-data","backend\ledger\templates;ledger\templates","--add-data","backend\ledger\migrations;ledger\migrations","--add-data","backend\staticfiles;backend\staticfiles","--collect-submodules","config","--collect-submodules","ledger","--collect-all","django","--collect-all","ninja","--collect-all","whitenoise","--collect-all","apscheduler","--collect-all","pydantic","--collect-all","webview","--collect-all","reportlab","desktop\main.py")
+Remove-Item Env:\LEDGER_DB_ENGINE
+$pkgArgs = @("--noconfirm","--clean","--windowed","--onedir","--name","KC Ledger","--paths","backend","--add-data","backend;backend","--add-data","dist;dist","--add-data","backend\ledger\templates;ledger\templates","--add-data","backend\ledger\migrations;ledger\migrations","--add-data","backend\staticfiles;backend\staticfiles","--collect-submodules","config","--collect-submodules","ledger","--collect-all","django","--collect-all","ninja","--collect-all","whitenoise","--collect-all","apscheduler","--collect-all","pydantic","--collect-all","webview","--collect-all","reportlab","--collect-all","psycopg","--collect-all","psycopg_binary","desktop\main.py")
 python -m PyInstaller @pkgArgs
 if ($LASTEXITCODE -ne 0) { throw "Desktop packaging failed" }
 $exe = "dist\KC Ledger\KC Ledger.exe"

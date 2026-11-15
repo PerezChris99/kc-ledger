@@ -1,40 +1,17 @@
-# Windows desktop: build, install and recovery
+# Windows desktop build, PostgreSQL and recovery
 
-**Status:** Windows package and self-test pass in GitHub Actions, but no signed/clean-device production release has been certified.
-
-## Build requirements
-
-Windows 10/11 x64, Python 3.12, Node.js 22, Inno Setup 6. Run in PowerShell from a fresh checkout:
+Build Windows 10/11 x64 installers using Python 3.12, Node.js 22 and Inno Setup 6:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File desktop\build_windows.ps1
 ```
 
-The script executes `npm ci`, ESLint and Vite production build; collects Django static files; installs the Python desktop extra; builds a PyInstaller one-folder executable; downloads and checks the Microsoft WebView2 bootstrapper Authenticode signature; then compiles an Inno Setup installer if `ISCC.exe` is present. The script prints SHA-256 hashes. A successful build alone is **not** an installer installation test.
+The builder verifies JSX frontend lint/Vite, bundles Django/ReportLab/psycopg with PyInstaller, includes WebView2 bootstrapper after Microsoft signature verification, and builds Inno Setup output under `installer-output/`. During packaging and `--self-test`, SQLite is deliberately used in an isolated temporary database so a PostgreSQL service is not a build dependency.
 
-## Produced files
+At real launch, `%LOCALAPPDATA%\KCLedger\.env` configures the preferred local PostgreSQL server. In its absence, `auto` mode chooses a **pinned SQLite fallback** on a fresh install, preserving the previous native experience. Already populated SQLite installations are not silently switched. To use PostgreSQL, create the local role/database and configure the values in [database runbook](25-postgresql-and-fallback.md).
 
-- PyInstaller runtime: `dist\KC Ledger\KC Ledger.exe` and bundled dependencies.
-- Inno Setup installer: `installer-output\KC-Ledger-Setup-0.1.0.exe` (when Inno Setup is installed).
-- In GitHub CI, downloadable artifact: `kc-ledger-windows-output`; separate smoke-test JSON: `kc-ledger-windows-smoke`.
+The installer preserves user data across upgrades/uninstall. PostgreSQL mode requires working `pg_dump` and `pg_restore` binaries for safety backups. Use `LEDGER_PG_BIN` to point at the PostgreSQL `bin` directory when they aren't on PATH.
 
-The app operates without separately installed Python/Node/Docker. WebView2 must be installed, or its signed Microsoft bootstrapper is invoked. That bootstrapper can require network access on first installation.
+The CI build/self-test checks packaged API/financial mutations/PDF/SQLite persistence. Actual interactive GUI use, PostgreSQL local-machine connectivity, code signing, clean-machine WebView2 setup and recovery drills require separate acceptance.
 
-## Runtime storage and recovery
-
-| File | Per-user location |
-| --- | --- |
-| Database | `%LOCALAPPDATA%\KCLedger\ledger.sqlite3` |
-| Persistent Django signing key | `%LOCALAPPDATA%\KCLedger\.session-key` |
-| Backups | `%LOCALAPPDATA%\KCLedger\backups` |
-| Logs | `%LOCALAPPDATA%\KCLedger\kc-ledger.log` |
-
-Never delete the per-user data directory as part of a routine upgrade. The installer is configured not to remove financial records on uninstall. Take and verify a backup **before** switching application versions, and use the dedicated restore management command only while the app is stopped.
-
-## Release check
-
-Verify clean Windows 10 and 11 installations, first-run account creation, WebView2 GUI use, invoices and PDFs, failed-login behavior, app shutdown/restart, migration from old data, integrity-checked restore, uninstall retention, offline launch and antivirus/SmartScreen behavior. Use an actual signed publisher build for public distribution; publish hashes, supported OS and recovery guidance.
-
-See [production readiness](21-production-readiness.md) for the full runbook. All checked CI steps are described in [verification matrix](24-verification-matrix.md).
-
-_Updated 2026-11-15; old TypeScript and WeasyPrint instructions removed._
+_Updated 2026-11-15._

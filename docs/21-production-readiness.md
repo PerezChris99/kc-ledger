@@ -1,22 +1,21 @@
-# Production readiness and release runbook
+# KC Ledger — production and database release gates
 
-## Status as of 2026-11-15
+**New default:** PostgreSQL 15+ as the local authoritative database, with SQLite WAL as a controlled and pinned fallback. Normal Docker/source deployments fail closed instead of allowing silent cross-database financial divergence. The original SQLite-only documentation is superseded.
 
-The latest merged `main` commit `df094e3e4696e4da30742725f062adb1ce4937c1` passed the existing five-job GitHub CI suite: Django tests/Ruff/Python advisory scan; JS/JSX lint/Vite build/npm audit; Docker build and health; Chromium browser E2E; Windows executable/installer build and packaged backend smoke.
+## Security
 
-**Important:** a green CI run means that *those checks* passed, not that every possible financial edge case, keyboard interaction or clean-device installation has been exercised. Any later commit needs a fresh run; do not reuse these results as its verification.
+- Bind Django/Waitress to local addresses only; Docker PostgreSQL 5432 is internal and not host-published.
+- Use an isolated PostgreSQL role, strong private credentials and localhost authentication rules. Never commit `.env`.
+- Django staff sessions, CSRF, rate limits and transactional financial mutations remain enforced.
+- PostgreSQL uses persistent, health-checked connections. `/api/health` verifies an actual database query and returns 503 when unavailable.
+- All financial records and audit history must be backed up; PostgreSQL `pg_dump` snapshots are **not encrypted** by the application.
 
-## Threat model and safety boundaries
-
-KC Ledger is single-owner financial software. Restrict access to one trusted operator and the loopback interface. The Docker frontend binds to `127.0.0.1:8080`. The desktop Waitress server binds to a random `127.0.0.1` port. The client cannot bypass Django's validation; state changes require staff session credentials and CSRF protection. The persistent login throttle resists restart resets. Audit events are append-only. Data at rest is **not encrypted by the application** and must be protected using operating-system account security and backup policy.
-
-Do not publish an HTTP-only deployment to the public internet. A remotely accessible deployment requires a separately designed authentication, TLS and reverse-proxy security model and additional penetration checks.
-
-## Developer verification before merge
+## Developer verification
 
 ```bash
 python -m pip install -e ".[dev]"
-python backend/manage.py check
+python backend/manage.py db_status
+python backend/manage.py check --database default
 python backend/manage.py makemigrations --check --dry-run
 python backend/manage.py migrate --plan
 pytest -q
@@ -29,42 +28,22 @@ npm run build
 npm audit --audit-level=high
 ```
 
-Run browser E2E against an **isolated test** instance with `npx playwright test`. Never run seeded tests against real financial data. CI additionally launches Docker and runs the Windows builder and packaged executable self-test.
+CI has independent SQLite and PostgreSQL backend jobs, a PostgreSQL service/backup check, Docker startup with PostgreSQL, Chromium browser financial flows and the Windows packaged application self-test. **CI must be rechecked for the specific new merge commit**; do not reuse an older green build as evidence.
 
-## Financial acceptance scenarios
+## Real deployment acceptance
 
-- Create/edit client; archive and verify unchanged retained history.
-- Create invoice, record partial and final payments, prevent overpayment, verify outstanding balances and statuses.
-- Create a multi-instalment plan, allocate FIFO, observe verdicts and reject edits after payment allocation.
-- Test disputed, written-off, paid and partially paid invoice transitions, including forbidden updates and correct receivables.
-- Add/edit/archive/restore engagements, time entries and expenses; confirm live analytics and client-scoring refresh.
-- Verify currency conversion, known missing FX rates, manually stored rates and target projections.
-- Generate invoice and dossier PDF with real representative data and validate totals.
-- Verify authentication, CSRF, logout/session expiry, throttle and failed login behavior.
+1. Create a dedicated PostgreSQL role/database on your actual local machine and verify `db_status` says `postgresql`.
+2. Apply migrations against a clean DB and a **copy** of a populated older DB; reconcile schema/indexes/constraints.
+3. Create client → engagement → invoice → instalment plan → partial/final payment and verify recorded sums, statuses and audit.
+4. Kill/restart PostgreSQL and verify **no silent SQLite failover**, HTTP 503 and successful reconnection after service recovery.
+5. If using automatic fallback in the desktop, exercise the pin behavior and prevent switching to a different financial history.
+6. Make a verified PostgreSQL `pg_dump` snapshot and perform an offline restore drill into a disposable DB; compare exact amounts and record counts.
+7. For existing SQLite data, complete a backed-up, **offline** verified migration before changing the database engine.
+8. Test actual desktop installation, first-run owner setup, restart/upgrade, PDF, WebView2, offline behavior, accessibility and release signing.
+9. Configure protected secondary/off-device backups, retention, filesystem access and encryption outside the application.
 
-## Windows operator acceptance checklist
+Do not expose this locally designed app to the public internet without a separately reviewed TLS and access model. Do not infer a 100% correct database connection to a user's PC from a hosted CI PostgreSQL service.
 
-1. Use a **clean Windows 10 and Windows 11 x64 environment**, not solely the GitHub-hosted build runner. Verify a standard non-admin installation and WebView2 prerequisite setup.
-2. Launch and create the owner account; verify no default credentials, no external port binding and a working native WebView window.
-3. Use a disposable ledger to exercise the financial acceptance scenarios above and read exported PDF documents.
-4. Close/reopen; force-stop and restart; ensure SQLite integrity and data retention, scheduler single-instance behavior and no startup crash loops.
-5. Install over an older version with a **copy** of an old test database; verify backup-before-migration and migration compatibility.
-6. Uninstall and reinstall; ensure user financial data remains where intended. Verify removal instructions separately if the user chooses to destroy data.
-7. Restore an integrity-checked backup into a disposable data folder with the app stopped. Verify record counts, amounts and scores.
-8. Confirm expected offline startup with the Windows WebView2 prerequisite already installed. Test CPU/memory and Windows Defender/SmartScreen behavior.
-9. Sign release binaries with the appropriate trusted publisher certificate; publish checksums, version, artifact provenance and instructions.
+See [PostgreSQL & fallback runbook](25-postgresql-and-fallback.md), [verification matrix](24-verification-matrix.md), and [Windows packaging](23-windows-desktop.md).
 
-**Release rule:** Do not publish a signed production release until these device and operational checks are recorded as passed. Claims of 100% software correctness cannot be established by source inspection alone.
-
-## Third-party and operations decisions
-
-- Exchange-rate feed: `EXCHANGERATE_HOST_ACCESS_KEY` and provider plan need a real-world test; manual pair entry is supported.
-- Backups: configure an off-device/secondary destination, secure access, retention and optional encryption, then demonstrate recovery.
-- Distribution: decide versioning, signing identity, private access policy, code-ownership and software-license wording for intended recipients.
-- Mobile/PWA: validate viewport, install prompt, keyboard/focus and accessibility in real browsers; financial mutations require a live API.
-
-## CI evidence
-
-[Latest merged-run source and package verification](https://github.com/PerezChris99/kc-ledger/actions/runs/43716306301) (2026-11-15). The current pipeline files are in `.github/workflows/`. After any change, inspect the **new** run results and address regressions.
-
-_Updated 2026-11-15; supersedes the older 2026-11-01 audit and remaining-work list._
+_Updated 2026-11-15._

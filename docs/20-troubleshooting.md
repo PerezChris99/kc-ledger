@@ -1,45 +1,37 @@
-# Troubleshooting, maintenance and recovery
+# Troubleshooting and recovery
 
-## GitHub still lists TypeScript
-
-The merged default branch has no `.ts` or `.tsx` files. After PR #8 GitHub Linguist may display stale language statistics until repository indexing refreshes. Confirm `main` HEAD, inspect the tree, and run `npm run verify:source` on a fresh clone; do not rewrite working JSX to influence the statistics.
-
-## Backend starts but frontend cannot reach it
-
-For Docker use `docker compose ps`, `docker compose logs -f api`, and visit <http://127.0.0.1:8080/health>. For source mode verify `DJANGO_SECRET_KEY` and run `python backend/manage.py check`; the development API must listen on `127.0.0.1:8000`. Vite proxies `/api` there. Do not expose Django's development server publicly.
-
-## Login or CSRF errors
-
-Use the actual configured owner account; no default desktop login is shipped. The first Docker owner is created once, from `LEDGER_USERNAME` and `LEDGER_PASSWORD`. Verify cookie and CSRF responses and the nginx Host header when using the Docker route. A repeated-failure throttle persists in SQLite across restarts. Do not disable CSRF to solve a reverse-proxy issue.
-
-## SQLite lock or migration issue
-
-Keep one intended writer/scheduler process and let WAL/SQLite apply its busy timeout. Do not manually copy a live `ledger.sqlite3` as a consistent backup. Run `python backend/manage.py backup_ledger` instead. Before a version upgrade run `python backend/manage.py showmigrations` and `python backend/manage.py migrate --plan`; take a verified backup, then migrate. Never delete production migration files.
-
-## Recovering financial data
-
-**Stop all KC Ledger processes before applying restore.** Validate first:
+## Verify your local PostgreSQL connection
 
 ```bash
-python backend/manage.py restore_ledger /path/to/backup.sqlite3
+python backend/manage.py db_status
+python backend/manage.py showmigrations ledger
+python backend/manage.py check
 ```
 
-Apply only when you have checked the target and retained a second copy:
+The first command must show `postgresql` for the primary database. Verify PostgreSQL is running, accepting TCP connections on `127.0.0.1:5432`, the role can log in, and `kc_ledger` exists. Local Python loads repository-root `.env`; Docker uses its internal `db` hostname and separate PostgreSQL volume. Avoid conflating the two servers. Test a direct connection with `psql -h 127.0.0.1 -U kc_ledger -d kc_ledger -c "SELECT 1;"`.
 
-```bash
-python backend/manage.py restore_ledger /path/to/backup.sqlite3 --apply --confirm RESTORE-LEDGER
-```
+## PostgreSQL unreachable / HTTP 503
 
-Restore code creates a pre-restore safety backup and verifies database integrity. The backup is **not encrypted automatically**; protect copies and test the complete recovery workflow before relying on it.
+Strict `postgres` mode **never writes into SQLite** if PostgreSQL goes offline. Restore PostgreSQL availability or use deliberate offline recovery with a verified migration. A 503 from `/api/health` means the configured database could not answer a live probe. Check PostgreSQL logs, credentials, user privileges, `pg_hba.conf` and firewall rules.
 
-## Stale PWA assets
+## SQLite fallback is still active
 
-PWA caches static UI assets, not live ledger API responses. After updating, close/reopen the app, then clear the browser service worker/cache if needed. Offline access to cached UI is not a substitute for offline transaction support.
+An `auto` installation pins its first successful backend in `.ledger-db-backend` (desktop: `%LOCALAPPDATA%\KCLedger\.database-backend`). This is expected: reconnecting PostgreSQL must not hide SQLite writes. Do **not** delete that file or change databases while live without first migrating and reconciling data. Legacy SQLite databases are preserved.
 
-## Windows installer/WebView2
+## PostgreSQL cutover blocked due to old SQLite
 
-Build with Python 3.12, Node 22 and Inno Setup 6. The installer includes Microsoft's signed WebView2 bootstrapper but may need internet to fetch WebView2 on first installation. Windows runtime data lives in `%LOCALAPPDATA%\KCLedger`. The installer should not erase this directory on uninstall.
+The `check_db_transition` command refuses to start a fresh PostgreSQL app if the old SQLite volume contains accounts or financial data. Back up the SQLite file, migrate data offline to PostgreSQL, compare every relevant table and all balances, then explicitly mark migration verified. See [migration runbook](25-postgresql-and-fallback.md).
 
-See [Windows packaging](23-windows-desktop.md), [release checklist](21-production-readiness.md), and [test matrix](24-verification-matrix.md).
+## Backups
+
+`python backend/manage.py backup_ledger` writes a verified `.dump` archive from PostgreSQL or `.sqlite3` online snapshot from SQLite, depending on the active backend. PostgreSQL backup/restore requires matching `pg_dump/pg_restore` client tools. Install the tools or set `LEDGER_PG_BIN` to the directory containing them. For recovery, stop the app/scheduler first; run `restore_ledger <archive>` to validate, then use `--apply --confirm RESTORE-LEDGER` after confirming target and safety backup. Never restore an archive to the wrong database.
+
+## Windows desktop
+
+The native app reads its per-user PostgreSQL configuration from `%LOCALAPPDATA%\KCLedger\.env`. An existing `ledger.sqlite3` is not automatically copied. For PostgreSQL-mode upgrades, backup client utilities must be available locally. Review `%LOCALAPPDATA%\KCLedger\kc-ledger.log`.
+
+## PWA and login
+
+The PWA caches static assets, never authoritative API financial responses. Financial writes require a live backend. A login failure may be due to bad credentials, persistent throttle, cookies/CSRF or the selected database containing another owner account. Do not disable CSRF or wipe the database to solve login issues.
 
 _Updated 2026-11-15._

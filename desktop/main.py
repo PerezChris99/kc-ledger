@@ -93,6 +93,11 @@ def run():
         data / "kc-ledger.log", maxBytes=2_000_000, backupCount=4, encoding="utf-8"
     )
     logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
+    # Allow the owner to configure local PostgreSQL without system-wide secrets.
+    # This file is private per-user and is never bundled with the installer.
+    from dotenv import load_dotenv
+
+    load_dotenv(data / ".env", override=False)
     kernel = ctypes.windll.kernel32
     kernel.CreateMutexW.restype = ctypes.c_void_p
     mutex = kernel.CreateMutexW(None, False, r"Local\KCLedgerDesktop")

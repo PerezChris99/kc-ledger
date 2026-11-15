@@ -6,8 +6,11 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
+
+from ledger.pg_backup import pre_restore_backup, restore_postgres_dump, validate_dump
 
 from ledger.management.commands.backup_ledger import check_integrity, write_backup
 
@@ -23,8 +26,10 @@ class Command(BaseCommand):
         parser.add_argument("--confirm", default="", help="Must equal RESTORE-LEDGER to apply")
 
     def handle(self, *args, **options):
+        if connection.vendor == "postgresql":
+            return self.restore_postgresql(options)
         if connection.vendor != "sqlite":
-            raise CommandError("Restore requires a SQLite database.")
+            raise CommandError("Unsupported KC Ledger restore backend.")
         backup = options["backup"].expanduser().resolve()
         if not backup.is_file():
             raise CommandError(f"Backup not found: {backup}")
@@ -93,5 +98,33 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"Restored and verified: {database}."
                 + (f" Safety backup retained at {safety}." if safety else "")
+            )
+        )
+
+    def restore_postgresql(self, options):
+        """Validate a pg_dump archive; apply only after an offline safety dump."""
+        backup = options["backup"].expanduser().resolve()
+        validate_dump(backup)
+        if not options["apply"]:
+            self.stdout.write(
+                f"DRY RUN: valid PostgreSQL archive {backup}; "
+                "stop KC Ledger, then pass --apply --confirm RESTORE-LEDGER."
+            )
+            return
+        if options["confirm"] != "RESTORE-LEDGER":
+            raise CommandError("--apply requires --confirm RESTORE-LEDGER.")
+        backup_dir = Path(
+            os.environ.get("LEDGER_BACKUP_DIR")
+            or settings.BASE_DIR / "data" / "backups"
+        ).expanduser().resolve()
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        safety = pre_restore_backup(backup_dir)
+        # The application must be offline; do not allow this command to retain
+        # a DB connection while pg_restore replaces schema objects.
+        connection.close()
+        restore_postgres_dump(backup)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"PostgreSQL restored from {backup}. Pre-restore copy retained at {safety}."
             )
         )
