@@ -4,6 +4,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates postgresql-client && rm -rf /var/lib/apt/lists/*
 COPY requirements-prod.lock /tmp/requirements-prod.lock
 RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements-prod.lock
+COPY VERSION /app/VERSION
 COPY backend/ ./backend/
 WORKDIR /app/backend
 RUN mkdir -p /app/data && DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')" DJANGO_DEBUG=1 python manage.py collectstatic --noinput \

@@ -107,6 +107,7 @@ def run():
     worker = None
     try:
         base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+        sys.path.insert(0, str(base))
         sys.path.insert(0, str(base / "backend"))
         os.environ.update({
             "DJANGO_SETTINGS_MODULE": "config.settings",
@@ -165,6 +166,14 @@ def run():
             raise RuntimeError("Local API did not pass the startup health check.")
 
         start_scheduler()
+        from desktop import updater
+        import random
+
+        def delayed_check():
+            time.sleep(random.uniform(4, 15))
+            updater.check_in_background()
+
+        threading.Thread(target=delayed_check, daemon=True).start()
         webview.create_window(
             "KC Ledger", f"http://127.0.0.1:{port}/",
             width=1360, height=860, min_size=(960, 640),
@@ -182,6 +191,15 @@ def run():
         if worker:
             worker.join(timeout=5)
         kernel.CloseHandle(ctypes.c_void_p(mutex))
+        from desktop import updater
+
+        command = data / "install-on-exit"
+        if command.exists():
+            command.unlink(missing_ok=True)
+            try:
+                updater.launch_pending()
+            except Exception:
+                LOG.exception("Failed to start the verified installer")
 
 
 
@@ -200,6 +218,7 @@ def self_test() -> None:
         try:
             folder = temp.name
             base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+            sys.path.insert(0, str(base))
             sys.path.insert(0, str(base / "backend"))
             os.environ.update({
                 "DJANGO_SETTINGS_MODULE": "config.settings",
@@ -292,6 +311,14 @@ def self_test() -> None:
 
 def main():
     try:
+        actions = {"--prepare-upgrade", "--post-upgrade-check", "--restore-upgrade"}
+        selected = actions.intersection(sys.argv[1:])
+        if selected:
+            if len(selected) != 1:
+                raise RuntimeError("Only one upgrade action is allowed")
+            from desktop.upgrade import run_action
+
+            sys.exit(run_action(next(iter(selected))))
         if "--self-test" in sys.argv:
             self_test()
         else:

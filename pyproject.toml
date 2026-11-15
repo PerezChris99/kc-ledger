@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kc-ledger"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Private financial operations console"
 requires-python = ">=3.11"
 dependencies = ["Django>=5.2,<5.3", "django-ninja>=1.8,<2", "APScheduler>=3.10,<4", "reportlab>=4.3,<5", "gunicorn>=22,<24", "whitenoise>=6.7,<7", "python-dotenv>=1,<2", "psycopg[binary]>=3.2,<4"]
@@ -30,3 +30,6 @@ target-version = "py311"
 # Django migration and model Meta classes intentionally use framework-required mutable lists.
 "backend/ledger/models.py" = ["RUF012"]
 "backend/ledger/migrations/*.py" = ["RUF012"]
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}

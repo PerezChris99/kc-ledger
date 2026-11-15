@@ -16,14 +16,30 @@ if not SECRET_KEY:
 if not DEBUG and (len(SECRET_KEY) < 40 or SECRET_KEY.startswith(("unsafe-", "replace-with-"))):
     raise RuntimeError("DJANGO_SECRET_KEY must be a unique random value of at least 40 characters.")
 
+IS_VERCEL = os.environ.get("LEDGER_DEPLOYMENT") == "vercel"
+if IS_VERCEL:
+    os.environ["LEDGER_DB_ENGINE"] = "postgres"
+    os.environ["RUN_SCHEDULER"] = "0"
+    if not os.environ.get("DATABASE_URL"):
+        raise RuntimeError("Vercel requires a managed PostgreSQL DATABASE_URL.")
 ALLOWED_HOSTS = [
     v.strip()
     for v in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if v.strip()
 ]
+if IS_VERCEL:
+    live_host = os.environ.get("VERCEL_URL", "").strip()
+    if live_host and live_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(live_host)
 CSRF_TRUSTED_ORIGINS = [
     v.strip() for v in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if v.strip()
 ]
+if IS_VERCEL:
+    for hostname in ALLOWED_HOSTS:
+        if hostname not in {"localhost", "127.0.0.1"}:
+            origin = "https://" + hostname
+            if origin not in CSRF_TRUSTED_ORIGINS:
+                CSRF_TRUSTED_ORIGINS.append(origin)
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
@@ -95,7 +111,7 @@ X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 if not DEBUG:
-    COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
+    COOKIE_SECURE = IS_VERCEL or os.environ.get("COOKIE_SECURE", "0") == "1"
     SESSION_COOKIE_SECURE = COOKIE_SECURE
     CSRF_COOKIE_SECURE = COOKIE_SECURE
     SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
@@ -103,6 +119,14 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = COOKIE_SECURE
     SECURE_HSTS_PRELOAD = False
     SECURE_SSL_REDIRECT = COOKIE_SECURE
+
+if IS_VERCEL:
+    if DEBUG:
+        raise RuntimeError("Vercel production cannot use Django DEBUG.")
+    if DATABASES["default"]["ENGINE"] != "django.db.backends.postgresql":
+        raise RuntimeError("Vercel must use PostgreSQL, never SQLite.")
+    DATABASES["default"]["CONN_MAX_AGE"] = 0
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 LEDGER_LOGIN_MAX_ATTEMPTS = max(2, int(os.environ.get("LEDGER_LOGIN_MAX_ATTEMPTS", "5")))
 LEDGER_LOGIN_WINDOW_SECONDS = max(60, int(os.environ.get("LEDGER_LOGIN_WINDOW_SECONDS", "900")))

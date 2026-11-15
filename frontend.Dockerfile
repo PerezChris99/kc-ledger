@@ -2,7 +2,8 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
-COPY index.html vite.config.js ./
+COPY index.html vite.config.js VERSION ./
+COPY scripts/ ./scripts/
 COPY frontend/ ./frontend/
 RUN npm run build
 FROM nginx:1.27-alpine

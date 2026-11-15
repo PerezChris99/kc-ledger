@@ -13,6 +13,12 @@ import HistoryPage from "./features/history/HistoryPage";
 import SettingsPage from "./features/settings/SettingsPage";
 import NotificationWatcher from "./features/notifications/NotificationWatcher";
 import InstallPrompt from "./features/pwa/InstallPrompt";
+function VersionBadge() {
+    const build = useQuery({ queryKey: ["version"], queryFn: () => api("/api/version"), staleTime: Infinity });
+    return <span className="mono" title={build.data?.git_sha || "Build metadata"}>
+      {build.data?.version ? `v${build.data.version} · ${build.data.channel}` : "Version unavailable"}
+    </span>;
+}
 const nav = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "clients", label: "Clients", icon: Users },
@@ -95,7 +101,7 @@ export default function App() {
         setActive("clients"); }} placeholder="Search clients, invoices, payments…" aria-label="Global search"/><kbd><Command size={11}/> K</kbd></div>
         <div className="topbar-actions"><InstallPrompt /><div className="clock"><Clock3 size={15}/><ClockDisplay timeZone={preferences.data?.time_zone}/></div><CalendarPopover /><FxPopover /><button className="icon-button" aria-label="Sign out" onClick={signOut}><LogOut size={17}/></button><button className="user-menu" onClick={signOut} aria-label="Sign out"><span className="avatar">KC</span><span className="user-copy"><strong>{session.data.username ?? "KC"}</strong><small>Owner · Sign out</small></span><ChevronDown size={14}/></button></div>
       </header>
-      <section className="page-content"><div className="page-heading"><div><p className="eyebrow">FINANCIAL OPERATIONS / {active.toUpperCase()}</p><h1>{heading}</h1><p className="page-subtitle">A precise view of your client relationships and cash position.</p></div><div className="date-stamp">{now.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}</div></div>{page}<footer className="page-footer"><span>© 2026 KC LEDGER · PRIVATE FINANCIAL OPERATIONS</span><span><a href="https://kweeziperez.com" target="_blank" rel="noreferrer">kweeziperez.com</a> · <a href="https://kcsaas.vercel.app" target="_blank" rel="noreferrer">KC SaaS</a> · <a href="tel:+256705265713">+256 705 265 713</a> · <a href="https://wa.me/256776254794" target="_blank" rel="noreferrer">WhatsApp</a></span></footer></section>
+      <section className="page-content"><div className="page-heading"><div><p className="eyebrow">FINANCIAL OPERATIONS / {active.toUpperCase()}</p><h1>{heading}</h1><p className="page-subtitle">A precise view of your client relationships and cash position.</p></div><div className="date-stamp">{now.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}</div></div>{page}<footer className="page-footer"><span>© 2026 KC LEDGER · PRIVATE FINANCIAL OPERATIONS · <VersionBadge /></span><span><a href="https://kweeziperez.com" target="_blank" rel="noreferrer">kweeziperez.com</a> · <a href="https://kcsaas.vercel.app" target="_blank" rel="noreferrer">KC SaaS</a> · <a href="tel:+256705265713">+256 705 265 713</a> · <a href="https://wa.me/256776254794" target="_blank" rel="noreferrer">WhatsApp</a></span></footer></section>
     </main>
     <button className="mobile-more-button" onClick={() => setMoreOpen(!moreOpen)} aria-label={moreOpen ? "Close more navigation" : "More navigation"}>{moreOpen ? <X size={18}/> : <Menu size={18}/>}<span>More</span></button>
   </div>;

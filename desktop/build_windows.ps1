@@ -4,6 +4,22 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 $version = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
 if ($version -ne "3.12") { throw "Python 3.12 is required; found $version" }
+$canonical = (Get-Content -Path "VERSION" -Raw).Trim()
+if ($canonical -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid VERSION" }
+Set-Content -Path "desktop/version.iss" -Value ('#define LedgerVersion "' + $canonical + '"') -Encoding ascii
+$thumb = ($env:KC_LEDGER_SIGNER_THUMBPRINT -replace '\s', '').ToUpperInvariant()
+if ($thumb -and $thumb -notmatch '^[0-9A-F]{40,64}$') { throw "Invalid publisher thumbprint" }
+$manifestUrl = if ($env:KC_LEDGER_MANIFEST_URL) { $env:KC_LEDGER_MANIFEST_URL } else {
+  'https://github.com/PerezChris99/kc-ledger/releases/latest/download/latest.json'
+}
+if (!$manifestUrl.StartsWith('https://')) { throw 'HTTPS update manifest is required' }
+@{
+  publisher_thumbprint = $thumb
+  manifest_url = $manifestUrl
+  beta_manifest_url = if ($env:KC_LEDGER_BETA_MANIFEST_URL) {
+     $env:KC_LEDGER_BETA_MANIFEST_URL
+  } else { 'https://github.com/PerezChris99/kc-ledger/releases/latest/download/latest.json' }
+} | ConvertTo-Json -Compress | Set-Content -Path "desktop/update_config.json" -Encoding UTF8
 if (!(Test-Path "package-lock.json")) { throw "package-lock.json is missing; generate and commit a lockfile" }
 npm ci
 if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
@@ -23,7 +39,7 @@ Remove-Item Env:\DJANGO_SECRET_KEY
 Remove-Item Env:\DJANGO_DEBUG
 Remove-Item Env:\LEDGER_DB_PATH
 Remove-Item Env:\LEDGER_DB_ENGINE
-$pkgArgs = @("--noconfirm","--clean","--windowed","--onedir","--name","KC Ledger","--paths","backend","--add-data","backend;backend","--add-data","dist;dist","--add-data","backend\ledger\templates;ledger\templates","--add-data","backend\ledger\migrations;ledger\migrations","--add-data","backend\staticfiles;backend\staticfiles","--collect-submodules","config","--collect-submodules","ledger","--collect-all","django","--collect-all","ninja","--collect-all","whitenoise","--collect-all","apscheduler","--collect-all","pydantic","--collect-all","webview","--collect-all","reportlab","--collect-all","psycopg","--collect-all","psycopg_binary","desktop\main.py")
+$pkgArgs = @("--noconfirm","--clean","--windowed","--onedir","--name","KC Ledger","--paths","backend","--paths",".","--add-data","VERSION;.","--add-data","backend;backend","--add-data","desktop/update_config.json;desktop","--add-data","desktop/verify_signature.ps1;desktop","--add-data","backend/config/build_info.json;backend/config","--add-data","dist;dist","--add-data","backend\ledger\templates;ledger\templates","--add-data","backend\ledger\migrations;ledger\migrations","--add-data","backend\staticfiles;backend\staticfiles","--collect-submodules","desktop","--collect-submodules","config","--collect-submodules","ledger","--collect-all","django","--collect-all","ninja","--collect-all","whitenoise","--collect-all","apscheduler","--collect-all","pydantic","--collect-all","webview","--collect-all","reportlab","--collect-all","psycopg","--collect-all","psycopg_binary","desktop\main.py")
 python -m PyInstaller @pkgArgs
 if ($LASTEXITCODE -ne 0) { throw "Desktop packaging failed" }
 $exe = "dist\KC Ledger\KC Ledger.exe"
