@@ -14,7 +14,7 @@ def serve_frontend(request, path=""):
     if getattr(sys, "frozen", False):
         root = Path(sys._MEIPASS) / "dist"
     else:
-        root = Path(__file__).resolve().parents[3] / "dist"
+        root = Path(__file__).resolve().parents[2] / "dist"
     root = root.resolve()
     target = (root / path).resolve()
     if not target.is_relative_to(root):

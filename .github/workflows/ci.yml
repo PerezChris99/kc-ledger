@@ -93,6 +93,25 @@ jobs:
         run: |
           $env:PATH += ";C:\Program Files (x86)\Inno Setup 6"
           & desktop\build_windows.ps1
+      - name: Smoke-test packaged Windows executable
+        shell: pwsh
+        run: |
+          $exe = Join-Path (Get-Location) 'dist\KC Ledger\KC Ledger.exe'
+          if (!(Test-Path $exe)) { throw 'Packaged KC Ledger executable missing' }
+          $report = Join-Path $env:RUNNER_TEMP 'kc-ledger-smoke.json'
+          $env:LEDGER_SMOKE_REPORT = $report
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if (Test-Path $report) { Get-Content $report }
+          if ($p.ExitCode -ne 0) { throw "Windows executable self-test failed: $($p.ExitCode)" }
+          if (!(Test-Path $report)) { throw 'Windows smoke test did not produce its report' }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if ($result.status -ne 'passed') { throw 'Desktop runtime smoke assertions failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kc-ledger-windows-smoke
+          path: ${{ runner.temp }}/kc-ledger-smoke.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()
         with:
