@@ -20,7 +20,7 @@ packages = []
 DJANGO_SETTINGS_MODULE = "config.test_settings"
 python_files = ["test_*.py", "*_tests.py"]
 testpaths = ["backend"]
-pythonpath = ["backend"]
+pythonpath = [".", "backend"]
 
 [tool.ruff]
 line-length = 100
