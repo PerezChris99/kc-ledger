@@ -280,7 +280,9 @@ def create_strategy_decision(request, payload: StrategyIn):
         and payload.metric != BusinessObjective.Metric.ACTIVE_CLIENTS
         and objective.currency != snapshot["currency"]
     ):
-        raise HttpError(409, "Goal currency differs from the current ledger currency; create a new target.")
+        raise HttpError(
+            409, "Goal currency differs from the current ledger currency; create a new target."
+        )
     baseline = current if start == timezone.localdate() and no_fx_gap else None
     row = BusinessStrategyDecision.objects.create(
         title=title,

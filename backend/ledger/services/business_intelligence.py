@@ -528,8 +528,10 @@ def objective_progress(objective, snapshot):
     max_direction = objective.metric in METRIC_MAXIMIZE
     metric_is_currency = objective.metric != BusinessObjective.Metric.ACTIVE_CLIENTS
     currency_mismatch = metric_is_currency and objective.currency != snapshot["currency"]
-    available = current is not None and not currency_mismatch and (
-        not snapshot["data_quality"]["missing_fx"] or not metric_is_currency
+    available = (
+        current is not None
+        and not currency_mismatch
+        and (not snapshot["data_quality"]["missing_fx"] or not metric_is_currency)
     )
     target = objective.target
     favorable = (current >= target if max_direction else current <= target) if available else None
@@ -566,8 +568,10 @@ def decision_review(decision, snapshot):
         decision.metric != BusinessObjective.Metric.ACTIVE_CLIENTS
         and decision.currency != snapshot["currency"]
     )
-    available = current is not None and not currency_mismatch and (
-        not snapshot["data_quality"]["missing_fx"] or decision.metric == "active_clients"
+    available = (
+        current is not None
+        and not currency_mismatch
+        and (not snapshot["data_quality"]["missing_fx"] or decision.metric == "active_clients")
     )
     delta = current - decision.baseline if available and decision.baseline is not None else None
     favorable = (
@@ -600,8 +604,8 @@ def decision_review(decision, snapshot):
         "outcome_note": decision.outcome_note,
         "caution": (
             "Base currency changed: do not compare different monetary units; rebaseline."
-            if currency_mismatch else
-            "Before/after association, not a causal estimate; review confounders and incomplete data."
+            if currency_mismatch
+            else "Before/after association, not a causal estimate; review confounders and incomplete data."
         ),
     }
 

@@ -501,14 +501,20 @@ def test_cash_goals_and_decision_baselines_fail_closed_after_currency_change():
     from ledger.services.business_intelligence import decision_review
 
     goal = BusinessObjective.objects.create(
-        name="Cash safety", metric="monthly_cash_result",
-        currency="USD", target=Decimal("50"),
+        name="Cash safety",
+        metric="monthly_cash_result",
+        currency="USD",
+        target=Decimal(50),
         due_date=timezone.localdate() + timedelta(days=15),
     )
     decision = BusinessStrategyDecision.objects.create(
-        title="Previous baseline", kind="pricing", metric="monthly_cash_result",
-        currency="USD", baseline=Decimal("75"),
-        started_on=timezone.localdate(), review_on=timezone.localdate(),
+        title="Previous baseline",
+        kind="pricing",
+        metric="monthly_cash_result",
+        currency="USD",
+        baseline=Decimal(75),
+        started_on=timezone.localdate(),
+        review_on=timezone.localdate(),
     )
     changed = build_business_snapshot(base="UGX")
     g = objective_progress(goal, changed)
