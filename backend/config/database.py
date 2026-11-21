@@ -43,12 +43,30 @@ def _postgres_database(environ):
             "db",
         }:
             raise RuntimeError("Vercel cannot use local PostgreSQL.")
-        if environ.get("LEDGER_DEPLOYMENT") == "vercel" and not parsed.query.count("sslmode="):
-            # Require TLS for a managed, externally reachable database.
-            raise RuntimeError("Serverless DATABASE_URL must set sslmode=require or stronger.")
         from urllib.parse import parse_qs
 
         q = parse_qs(parsed.query)
+        sslmode = q.get("sslmode", ["require"])[0]
+        if environ.get("LEDGER_DEPLOYMENT") == "vercel" and sslmode not in {
+            "require", "verify-ca", "verify-full"
+        }:
+            raise RuntimeError("Serverless PostgreSQL must use TLS sslmode=require or stronger.")
+        if environ.get("LEDGER_DEPLOYMENT") == "vercel" and "sslmode" not in q:
+            raise RuntimeError("Serverless DATABASE_URL must declare TLS sslmode=require or stronger.")
+        # Prisma and similar PgBouncer transaction poolers reject PostgreSQL
+        # startup '-c' session options. Keep query/connection timeouts at the
+        # Django/function layer rather than using unsupported startup settings.
+        pooled = parsed.hostname.startswith("pooled.") or "-pooler." in parsed.hostname
+        options = {
+            "sslmode": sslmode,
+            "connect_timeout": 3,
+            "application_name": "kc_ledger_vercel",
+        }
+        if not pooled:
+            options["options"] = (
+                "-c statement_timeout=15000 "
+                "-c idle_in_transaction_session_timeout=30000"
+            )
         return {
             "ENGINE": POSTGRES,
             "NAME": unquote(parsed.path.lstrip("/")),
@@ -58,12 +76,7 @@ def _postgres_database(environ):
             "PORT": str(parsed.port or 5432),
             "CONN_MAX_AGE": 0 if environ.get("LEDGER_DEPLOYMENT") == "vercel" else 60,
             "CONN_HEALTH_CHECKS": True,
-            "OPTIONS": {
-                "sslmode": q.get("sslmode", ["require"])[0],
-                "connect_timeout": 3,
-                "options": "-c statement_timeout=15000 -c idle_in_transaction_session_timeout=30000",
-                "application_name": "kc_ledger_vercel",
-            },
+            "OPTIONS": options,
         }
     return {
         "ENGINE": POSTGRES,
@@ -165,12 +178,14 @@ def select_database(environ=None, base_dir=None):
     mode = env.get("LEDGER_DB_ENGINE", "postgres").strip().lower()
     if mode not in {"postgres", "postgresql", "sqlite", "auto"}:
         raise RuntimeError("LEDGER_DB_ENGINE must be postgres, sqlite or auto.")
+    # The managed serverless filesystem is read-only: never mkdir a local
+    # SQLite data directory while connecting to an authoritative Postgres.
+    if mode in {"postgres", "postgresql"}:
+        return _postgres_database(env)
     sqlite = _sqlite_database(env, base)
     if mode == "sqlite":
         return sqlite
     postgres = _postgres_database(env)
-    if mode != "auto":
-        return postgres
 
     marker = (
         Path(env.get("LEDGER_DB_PIN_PATH") or sqlite["NAME"].parent / ".ledger-db-backend")

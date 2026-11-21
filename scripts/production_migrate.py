@@ -20,6 +20,15 @@ def main():
     os.environ["LEDGER_DEPLOYMENT"] = "vercel"
     os.environ["LEDGER_DB_ENGINE"] = "postgres"
     os.environ["RUN_SCHEDULER"] = "0"
+    # Prisma Postgres and other PgBouncer providers need a DIRECT session
+    # endpoint for schema migrations and pg_dump. Vercel runtime keeps using
+    # the pooled DATABASE_URL for API/cron requests.
+    runtime_url = os.environ.get("DATABASE_URL", "")
+    direct_url = os.environ.get("DATABASE_DIRECT_URL", "")
+    if "pooled.db.prisma.io" in runtime_url and not direct_url:
+        raise SystemExit("Prisma Postgres requires DATABASE_DIRECT_URL for migrations and pg_dump.")
+    if direct_url:
+        os.environ["DATABASE_URL"] = direct_url
     required = ("DATABASE_URL", "DJANGO_SECRET_KEY", "LEDGER_USERNAME", "LEDGER_PASSWORD")
     if any(not os.environ.get(name) for name in required):
         raise SystemExit("Missing production managed PostgreSQL or owner credentials")

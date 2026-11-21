@@ -26,3 +26,6 @@ backups/
 desktop/MicrosoftEdgeWebView2Setup.exe
 
 desktop/update_config.json
+
+# Reproducible PWA PNGs generated during the frontend build
+/public/pwa/

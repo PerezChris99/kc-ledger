@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node scripts/build_metadata.mjs && vite --host 0.0.0.0",
-    "build": "node scripts/build_metadata.mjs && vite build",
+    "dev": "node scripts/generate_pwa_icons.mjs && node scripts/build_metadata.mjs && vite --host 0.0.0.0",
+    "build": "node scripts/generate_pwa_icons.mjs && node scripts/build_metadata.mjs && vite build && npm run verify:pwa",
+    "verify:pwa": "node scripts/verify_pwa_build.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "eslint frontend e2e vite.config.js playwright.config.js --max-warnings=0",
     "verify:source": "node scripts/verify_source.mjs"

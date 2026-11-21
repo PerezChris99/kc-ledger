@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY index.html vite.config.js VERSION ./
+COPY public/ ./public/
 COPY scripts/ ./scripts/
 COPY frontend/ ./frontend/
 ARG LEDGER_GIT_SHA=unknown
