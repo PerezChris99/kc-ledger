@@ -42,6 +42,17 @@ const kinds = [
     ["costs", "Cost management"], ["capacity", "Capacity / time"],
     ["other", "Other"]
 ];
+const pipelineStages = [
+    ["discovered", "Discovered"], ["contacted", "Contacted"],
+    ["qualified", "Qualified"], ["proposed", "Proposal sent"],
+    ["negotiating", "Negotiating"], ["won", "Won"],
+    ["lost", "Lost"], ["archived", "Archived"]
+];
+const pipelineSources = [
+    ["unknown", "Unknown"], ["referral", "Referral"],
+    ["inbound", "Inbound"], ["outbound", "Outbound"],
+    ["repeat", "Repeat buyer"], ["other", "Other"]
+];
 const dateIn = (days) => {
     const value = new Date();
     value.setDate(value.getDate() + days);
@@ -84,6 +95,12 @@ export default function BusinessCommandPage() {
     const [consent, setConsent] = useState(false);
     const [advice, setAdvice] = useState(null);
     const [clientId, setClientId] = useState("");
+    const [opportunityName, setOpportunityName] = useState("");
+    const [opportunitySource, setOpportunitySource] = useState("unknown");
+    const [opportunityAmount, setOpportunityAmount] = useState("0");
+    const [opportunityCurrency, setOpportunityCurrency] = useState("");
+    const [opportunityNext, setOpportunityNext] = useState("");
+    const [pipelineEdits, setPipelineEdits] = useState({});
     const cache = useQueryClient();
     const query = useQuery({
         queryKey: ["business-intelligence"],
@@ -190,6 +207,51 @@ export default function BusinessCommandPage() {
         );
         if (result) setAdvice(result);
     }
+    async function createOpportunity(e) {
+        e.preventDefault();
+        const result = await perform(
+            () => api("/api/intelligence/business/opportunities", {
+                method: "POST",
+                body: JSON.stringify({
+                    name: opportunityName, source: opportunitySource,
+                    proposed_amount: opportunityAmount,
+                    currency: opportunityCurrency || data.currency,
+                    next_action: opportunityNext
+                })
+            }), "Prospect recorded without inventing a sale."
+        );
+        if (result) {
+            setOpportunityName("");
+            setOpportunityAmount("0");
+            setOpportunityNext("");
+        }
+    }
+    function editOpportunity(item, field, value) {
+        setPipelineEdits(previous => ({
+            ...previous,
+            [item.id]: {
+                stage: item.stage, next_action: item.next_action,
+                lost_reason: item.lost_reason,
+                ...previous[item.id], [field]: value
+            }
+        }));
+    }
+    async function updateOpportunity(item) {
+        const change = pipelineEdits[item.id] ?? {
+            stage: item.stage, next_action: item.next_action,
+            lost_reason: item.lost_reason
+        };
+        const result = await perform(
+            () => api("/api/intelligence/business/opportunities/" + item.id, {
+                method: "PATCH", body: JSON.stringify(change)
+            }), "Observed stage and next action saved to the business history."
+        );
+        if (result) setPipelineEdits(previous => {
+            const next = { ...previous };
+            delete next[item.id];
+            return next;
+        });
+    }
     if (query.isLoading) {
         return <div className="loading-panel">Reconciling recorded business activity and strategy history…</div>;
     }
@@ -221,6 +283,10 @@ export default function BusinessCommandPage() {
             ["OVERDUE RECEIVABLES", chartMoney(data.metrics.overdue), "Unpaid and past due", Number(data.metrics.overdue) > 0 ? "negative" : "neutral"],
             ["OUTSTANDING", chartMoney(data.metrics.outstanding), "Open non-draft invoices", "neutral"],
             ["ACTIVE CLIENTS", data.metrics.active_clients, "Current active records", "neutral"],
+            ["DUE NEXT 30 DAYS", chartMoney(data.metrics.due_next_30_days), "Unpaid invoice schedule · not guaranteed", "neutral"],
+            ["TOP CLIENT · 90 DAYS", Number(data.metrics.last_90d_receipts) ?
+              data.metrics.top_client_share_last_90d_pct + "%" : "—",
+              "Share of recorded receipts from one account", "neutral"],
         ].map(([label, value, caption, tone]) =>
             <section className="panel kpi-card" key={label}>
               <div className="panel-heading"><span>{label}</span></div>
@@ -235,6 +301,7 @@ export default function BusinessCommandPage() {
       <div className="intel-tabs" role="tablist" aria-label="Business intelligence sections">
         {[
             ["performance", "Performance & anomalies"],
+            ["pipeline", "Sales pipeline"],
             ["strategy", "Strategy & goals"],
             ["pitches", "Client approach"],
             ["advisor", "Advisor & challenge"]
@@ -350,6 +417,90 @@ export default function BusinessCommandPage() {
           </div>
         </section>
       </>}
+      {section === "pipeline" && <>
+        <div className="command-two">
+          <section className="panel">
+            <div className="panel-heading"><span>OBSERVED SALES FUNNEL</span><span className="panel-period">NO PREDICTED SALES</span></div>
+            <div className="command-forecast">
+              <div><small>Open prospects</small><strong>{data.pipeline.total_open}</strong></div>
+              <div><small>Won / lost</small><strong>{data.pipeline.won} / {data.pipeline.lost}</strong></div>
+              <div><small>Observed win share</small><strong>{data.pipeline.observed_win_share_pct === null ?
+                  "Insufficient" : data.pipeline.observed_win_share_pct + "%"}</strong></div>
+            </div>
+            <p className="settings-note">
+              {data.pipeline.closed_sample} closed outcomes recorded. Win share requires at least 5;
+              it is NOT an individual buying probability or a reliable forecast.
+            </p>
+            <div className="command-chart"><Bar data={{
+                labels: data.pipeline.stages.map(x => pipelineStages.find(stage => stage[0] === x.stage)?.[1] ?? x.stage),
+                datasets: [{ label: "Recorded opportunities",
+                    data: data.pipeline.stages.map(x => x.count),
+                    backgroundColor: colors.receipts }]
+              }} options={{ ...chartBase, indexAxis: "y",
+                  scales: { x: { beginAtZero: true }, y: { grid: { display: false } } }
+              }}/></div>
+            <p className="settings-note">{data.pipeline.limitations}</p>
+          </section>
+          <section className="panel">
+            <div className="panel-heading"><span>NEW LEAD / PROPOSAL</span><span className="panel-period">DOCUMENT REAL WORK</span></div>
+            <form className="form-stack" onSubmit={createOpportunity}>
+              <label>PROSPECT OR PROPOSAL<input required maxLength={160}
+                value={opportunityName} onChange={e => setOpportunityName(e.target.value)}
+                placeholder="Website redesign proposal"/></label>
+              <div className="form-row">
+                <label>ACQUISITION SOURCE<select value={opportunitySource}
+                  onChange={e => setOpportunitySource(e.target.value)}>
+                  {pipelineSources.map(([key, label]) =>
+                    <option key={key} value={key}>{label}</option>)}
+                </select></label>
+                <label>QUOTED VALUE<input type="number" min="0" step=".01"
+                  value={opportunityAmount} onChange={e => setOpportunityAmount(e.target.value)}/></label>
+              </div>
+              <label>QUOTE CURRENCY<input maxLength={3}
+                placeholder={data.currency} value={opportunityCurrency}
+                onChange={e => setOpportunityCurrency(e.target.value.toUpperCase())}/></label>
+              <label>NEXT VERIFIABLE ACTION<input maxLength={280}
+                placeholder="Confirm scope during discovery call" value={opportunityNext}
+                onChange={e => setOpportunityNext(e.target.value)}/></label>
+              <button className="primary-button" disabled={busy}>Add to sales pipeline</button>
+              <p className="settings-note">Quoted values are NOT booked income. Record a win or loss only when the outcome is known.</p>
+            </form>
+          </section>
+        </div>
+        <section className="panel">
+          <div className="panel-heading"><span>RECORDED PROPOSAL HISTORY</span><span className="panel-period">UP TO 80 RECENT ENTRIES</span></div>
+          {data.pipeline.opportunities.length === 0 ?
+            <p className="empty-message">Record a real prospect to begin tracking pitches, outcomes and acquisition sources.</p> :
+            <div className="command-opportunity-list">
+              {data.pipeline.opportunities.map(item => {
+                const edit = pipelineEdits[item.id] ?? item;
+                return <article className="command-opportunity" key={item.id}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <p className="settings-note">{pipelineSources.find(x => x[0] === item.source)?.[1]} ·
+                      opened {item.opened_on} · quoted {moneyLike(item.proposed_amount, item.currency)}</p>
+                    <small>Last updated {item.updated_at.slice(0, 10)}
+                      {item.closed_on ? " · closed " + item.closed_on : ""}</small>
+                  </div>
+                  <label>STATUS<select value={edit.stage}
+                    onChange={e => editOpportunity(item, "stage", e.target.value)}>
+                    {pipelineStages.map(([key, label]) =>
+                      <option key={key} value={key}>{label}</option>)}
+                  </select></label>
+                  <label>NEXT ACTION<input value={edit.next_action}
+                    maxLength={280}
+                    onChange={e => editOpportunity(item, "next_action", e.target.value)}/></label>
+                  {edit.stage === "lost" && <label>RECORDED LOSS REASON<input
+                    value={edit.lost_reason} maxLength={100}
+                    placeholder="Optional factual reason" onChange={e =>
+                      editOpportunity(item, "lost_reason", e.target.value)}/></label>}
+                  <button type="button" className="small-button" disabled={busy}
+                    onClick={() => void updateOpportunity(item)}>Save outcome</button>
+                </article>;
+              })}
+            </div>}
+        </section>
+      </>}
       {section === "strategy" && <>
         <div className="command-two">
           <section className="panel">
@@ -456,10 +607,17 @@ export default function BusinessCommandPage() {
             {data.decisions.slice(0, 30).map(row => <article className="command-decision" key={row.id}>
                 <div className="command-decision-head"><strong>{row.title}</strong><span>{row.status}</span></div>
                 <p className="settings-note">{kinds.find(x => x[0] === row.kind)?.[1]} · review {row.review_on}</p>
-                <div className="command-decision-numbers"><span>Baseline <strong>{row.baseline ?? "Unknown"}</strong></span>
-                  <span>Current <strong>{row.current ?? "Unavailable"}</strong></span>
-                  <span>Difference <strong>{row.observed_change ?? "—"}</strong></span></div>
-                {row.direction_favorable === false && <p className="inline-warning">The tracked metric moved in an unfavorable direction. Reevaluate assumptions.</p>}
+                <div className="command-decision-numbers">
+                  <span>Baseline <strong>{row.baseline ?? "Unknown"}</strong></span>
+                  <span>Captured review <strong>{row.review_value ?? "Not reviewed"}</strong></span>
+                  <span>Review change <strong>{row.observed_change ?? "—"}</strong></span>
+                </div>
+                <p className="settings-note">Latest metric: {row.current ?? "Unavailable"}
+                  {row.reviewed_at ? " · frozen review " + row.reviewed_at.slice(0, 10) : ""}
+                  {" · evidence: " + row.review_quality}</p>
+                {row.direction_favorable === false && <p className="inline-warning">At the actual review, the tracked metric moved in an unfavorable direction. Reevaluate assumptions.</p>}
+                {row.review_quality === "unchanged" && <p className="settings-note">No measured improvement or deterioration at review.</p>}
+                {row.reviewed_at && row.review_quality !== "observed" && row.review_quality !== "unchanged" && <p className="inline-warning">The owner closed this review without sufficient comparable evidence.</p>}
                 {row.review_due && <p className="inline-warning">Review due. Document evidence and next steps.</p>}
                 {row.outcome_note && <p className="settings-note">Outcome: {row.outcome_note}</p>}
                 <p className="settings-note">{row.caution}</p>

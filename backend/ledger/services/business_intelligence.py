@@ -6,7 +6,7 @@ illustrative, never guaranteed, and no model is allowed to write source data.
 """
 
 from collections import Counter, defaultdict
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from statistics import median
 
@@ -177,6 +177,10 @@ def build_business_snapshot(as_of=None, base=None):
     client_expenses = defaultdict(lambda: ZERO)
     client_hours = defaultdict(lambda: ZERO)
     client_overdue = defaultdict(lambda: ZERO)
+    recent_client_receipts = defaultdict(lambda: ZERO)
+    recent_receipts = ZERO
+    due_next_30_days = ZERO
+    due_next_30_count = 0
     category_costs = defaultdict(lambda: ZERO)
     engagement_hours = defaultdict(lambda: ZERO)
     revenue_by_engagement = defaultdict(lambda: ZERO)
@@ -185,9 +189,15 @@ def build_business_snapshot(as_of=None, base=None):
     paid_by_invoice = defaultdict(lambda: ZERO)
     invoice_status = Counter()
     receipts_count = expenses_count = 0
+    # Future dated records must not be counted as current financial performance.
+    future_payment_count = Payment.objects.filter(paid_on__gt=today).count()
+    future_expense_count = Expense.objects.filter(spent_on__gt=today).count()
+    future_invoice_count = Invoice.objects.filter(issue_date__gt=today).count()
 
     for payment in (
-        Payment.objects.select_related("invoice", "client").all().iterator(chunk_size=400)
+        Payment.objects.select_related("invoice", "client")
+        .filter(paid_on__lte=today)
+        .iterator(chunk_size=400)
     ):
         paid_by_invoice[payment.invoice_id] += payment.amount
         value = convert(payment.amount, payment.invoice.currency)
@@ -195,6 +205,9 @@ def build_business_snapshot(as_of=None, base=None):
             incomplete_fx.add(payment.invoice.currency)
             continue
         collected += value
+        if payment.paid_on >= today - timedelta(days=89):
+            recent_receipts += value
+            recent_client_receipts[payment.client_id] += value
         receipts_count += 1
         client_receipts[payment.client_id] += value
         if payment.invoice.engagement_id:
@@ -204,7 +217,7 @@ def build_business_snapshot(as_of=None, base=None):
             month["receipts"] += value
             month["receipt_count"] += 1
 
-    for entry in Expense.objects.all().iterator(chunk_size=400):
+    for entry in Expense.objects.filter(spent_on__lte=today).iterator(chunk_size=400):
         value = convert(entry.amount, entry.currency)
         if value is None:
             incomplete_fx.add(entry.currency)
@@ -222,7 +235,7 @@ def build_business_snapshot(as_of=None, base=None):
             month["expense_count"] += 1
 
     for row in (
-        TimeEntry.objects.all()
+        TimeEntry.objects.filter(started_at__date__lte=today)
         .values("client_id", "engagement_id", "hours", "category")
         .iterator(chunk_size=400)
     ):
@@ -230,7 +243,7 @@ def build_business_snapshot(as_of=None, base=None):
         engagement_hours[row["engagement_id"]] += row["hours"]
 
     inconsistent_invoice_count = 0
-    for invoice in Invoice.objects.all().iterator(chunk_size=400):
+    for invoice in Invoice.objects.filter(issue_date__lte=today).iterator(chunk_size=400):
         invoice_status[invoice.status] += 1
         paid = paid_by_invoice[invoice.id]
         if paid > invoice.amount or (
@@ -252,6 +265,9 @@ def build_business_snapshot(as_of=None, base=None):
             if invoice.status == Invoice.Status.DISPUTED:
                 unpaid_disputed += balance
             if balance > ZERO:
+                if today <= invoice.due_date <= today + timedelta(days=30):
+                    due_next_30_days += balance
+                    due_next_30_count += 1
                 age = (today - invoice.due_date).days
                 aging = (
                     "not_due"
@@ -311,6 +327,11 @@ def build_business_snapshot(as_of=None, base=None):
     top_share = (
         Decimal(contributions[0]["receipts"]) / collected if contributions and collected else ZERO
     )
+    recent_share = (
+        max(recent_client_receipts.values(), default=ZERO) / recent_receipts
+        if recent_receipts
+        else ZERO
+    )
     project_rows = []
     for eng in Engagement.all_objects.select_related("client").all():
         hours = engagement_hours[eng.id]
@@ -330,8 +351,16 @@ def build_business_snapshot(as_of=None, base=None):
             }
         )
     project_rows.sort(key=lambda row: Decimal(row["received"]), reverse=True)
-    anomaly_rows = _monthly_anomalies(monthly_rows)
-    forecast = _rough_forecast(monthly_rows)
+    if incomplete_fx:
+        anomaly_rows = []
+        forecast = {
+            "available": False,
+            "confidence": "insufficient",
+            "reason": "Missing FX conversions make historical financial comparisons incomplete.",
+        }
+    else:
+        anomaly_rows = _monthly_anomalies(monthly_rows)
+        forecast = _rough_forecast(monthly_rows)
     metrics = {
         BusinessObjective.Metric.MONTHLY_RECEIPTS: Decimal(latest_complete["receipts"]),
         BusinessObjective.Metric.MONTHLY_CASH_RESULT: Decimal(latest_complete["cash_result"]),
@@ -451,6 +480,7 @@ def build_business_snapshot(as_of=None, base=None):
             row
             for row in contributions
             if row["status"] == Client.Status.ACTIVE
+            and not row["is_archived"]
             and Decimal(row["direct_cash_contribution"]) < ZERO
         ]
         if low_clients:
@@ -464,6 +494,19 @@ def build_business_snapshot(as_of=None, base=None):
                     "Do not call this accounting loss without allocating labor and shared overhead.",
                 )
             )
+    if future_payment_count or future_expense_count or future_invoice_count:
+        rules.append(
+            _rule(
+                "future_dated_records",
+                "medium",
+                "Future-dated ledger entries are excluded from current cash analysis",
+                f"Found {future_payment_count} future payments, "
+                f"{future_expense_count} future expenses and "
+                f"{future_invoice_count} future-issued invoices.",
+                "Confirm transaction dates and distinguish planned from actual cash movement.",
+                "Do not treat future entries as settled revenue or realized expenses.",
+            )
+        )
     rules.sort(key=lambda x: ({"high": 0, "medium": 1, "low": 2}[x["priority"]], x["id"]))
     return {
         "as_of": today.isoformat(),
@@ -474,6 +517,8 @@ def build_business_snapshot(as_of=None, base=None):
             "recorded_net_cash": amount(cash_result),
             "outstanding": amount(outstanding),
             "overdue": amount(overdue),
+            "due_next_30_days": amount(due_next_30_days),
+            "due_next_30_invoice_count": due_next_30_count,
             "billed_non_draft": amount(billed),
             "written_off": amount(written_off),
             "unpaid_disputed": amount(unpaid_disputed),
@@ -484,6 +529,8 @@ def build_business_snapshot(as_of=None, base=None):
             "logged_hours": amount(total_hours),
             "cash_per_logged_hour": amount(cash_per_hour) if cash_per_hour else None,
             "top_client_share_pct": round(float(top_share * 100), 1),
+            "top_client_share_last_90d_pct": round(float(recent_share * 100), 1),
+            "last_90d_receipts": amount(recent_receipts),
             "unassigned_expenses": amount(expenses - sum(client_expenses.values(), ZERO)),
         },
         "metric_values": metrics,
@@ -509,13 +556,21 @@ def build_business_snapshot(as_of=None, base=None):
         "data_quality": {
             "missing_fx": sorted(incomplete_fx),
             "invoice_mismatches": inconsistent_invoice_count,
+            "future_dated_excluded": {
+                "payments": future_payment_count,
+                "expenses": future_expense_count,
+                "invoices": future_invoice_count,
+            },
             "expense_capture_verified": False,
             "unrecorded_costs_possible": True,
             "classification": "recorded cash movement, not audited accounting profit",
             "notes": [
+                "Cash analysis includes records dated on or before the as-of date; future entries are excluded.",
                 "Receipts reflect recorded payments and expenses reflect recorded cost entries.",
                 "Accrual income, taxes, owner pay, depreciation, liabilities and complete cost allocations are not verified.",
                 "Cash result is not bank balance or accounting profit/loss.",
+                "Due-next-30-days figures are unpaid invoice schedules, not guaranteed receipts.",
+                "90-day concentration reflects only documented collected payments in that period.",
                 "FX conversions use the currently stored rates, not historical transaction rates.",
                 "Per-client direct contribution excludes unallocated/shared costs and unrecorded labor.",
             ],
@@ -563,22 +618,22 @@ def objective_progress(objective, snapshot):
 
 
 def decision_review(decision, snapshot):
-    current = snapshot["metric_values"].get(decision.metric)
-    currency_mismatch = (
-        decision.metric != BusinessObjective.Metric.ACTIVE_CLIENTS
-        and decision.currency != snapshot["currency"]
-    )
+    """Live context plus an immutable, captured historical review outcome.
+
+    Changes after a decision is reviewed cannot turn a failure into a success.
+    No movement is neutral, not a favorable change. Legacy reviewed decisions
+    without review snapshots remain explicitly unmeasured.
+    """
+    live_current = snapshot["metric_values"].get(decision.metric)
+    monetary = decision.metric != BusinessObjective.Metric.ACTIVE_CLIENTS
+    currency_mismatch = monetary and decision.currency != snapshot["currency"]
     available = (
-        current is not None
+        live_current is not None
         and not currency_mismatch
-        and (not snapshot["data_quality"]["missing_fx"] or decision.metric == "active_clients")
+        and (not snapshot["data_quality"]["missing_fx"] or not monetary)
     )
-    delta = current - decision.baseline if available and decision.baseline is not None else None
-    favorable = (
-        (delta >= ZERO if decision.metric in METRIC_MAXIMIZE else delta <= ZERO)
-        if delta is not None
-        else None
-    )
+    current = live_current if available else None
+    observed = decision.review_change if decision.reviewed_at is not None else None
     return {
         "id": decision.id,
         "title": decision.title,
@@ -592,22 +647,55 @@ def decision_review(decision, snapshot):
         "currency": decision.currency,
         "currency_mismatch": currency_mismatch,
         "baseline": amount(decision.baseline) if decision.baseline is not None else None,
-        "current": amount(current) if available else None,
-        "observed_change": amount(delta) if delta is not None else None,
-        "direction_favorable": favorable,
+        "current": amount(current) if current is not None else None,
+        "review_value": (
+            amount(decision.review_value) if decision.review_value is not None else None
+        ),
+        "observed_change": amount(observed) if observed is not None else None,
+        "direction_favorable": (
+            decision.review_favorable if decision.reviewed_at is not None else None
+        ),
+        "reviewed_at": (decision.reviewed_at.isoformat() if decision.reviewed_at else None),
+        "review_quality": decision.review_quality,
         "status": decision.status,
         "started_on": decision.started_on.isoformat(),
         "review_on": decision.review_on.isoformat(),
-        "review_due": decision.review_on <= date.fromisoformat(snapshot["as_of"])
-        and decision.status
-        in {BusinessStrategyDecision.Status.ACTIVE, BusinessStrategyDecision.Status.PLANNED},
+        "review_due": (
+            decision.review_on <= date.fromisoformat(snapshot["as_of"])
+            and decision.status
+            in {
+                BusinessStrategyDecision.Status.ACTIVE,
+                BusinessStrategyDecision.Status.PLANNED,
+            }
+        ),
         "outcome_note": decision.outcome_note,
         "caution": (
-            "Base currency changed: do not compare different monetary units; rebaseline."
+            "Base currency changed: live comparisons are unavailable; prior captured reviews remain frozen."
             if currency_mismatch
-            else "Before/after association, not a causal estimate; review confounders and incomplete data."
+            else "Captured review direction is a historical observation, never causal proof."
+            if decision.reviewed_at
+            else "No favorable outcome is claimed until a dated owner review records its evidence."
         ),
     }
+
+
+def review_outcome(decision, snapshot):
+    """Compute one explicit dated review, without storing fabricated progress."""
+    if decision.baseline is None:
+        return None, None, None, "missing_baseline"
+    current = snapshot["metric_values"].get(decision.metric)
+    is_money = decision.metric != BusinessObjective.Metric.ACTIVE_CLIENTS
+    if is_money and decision.currency != snapshot["currency"]:
+        return None, None, None, "currency_mismatch"
+    if is_money and snapshot["data_quality"]["missing_fx"]:
+        return None, None, None, "missing_fx"
+    if current is None:
+        return None, None, None, "missing_evidence"
+    change = current - decision.baseline
+    if change == ZERO:
+        return current, change, None, "unchanged"
+    favorable = change > ZERO if decision.metric in METRIC_MAXIMIZE else change < ZERO
+    return current, change, favorable, "observed"
 
 
 def prioritize_goals_and_decisions(snapshot, objectives, decisions):

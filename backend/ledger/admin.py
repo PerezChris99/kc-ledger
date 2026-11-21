@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     BusinessAdvisoryReport,
     BusinessObjective,
+    BusinessOpportunity,
     BusinessStrategyDecision,
     Client,
     ClientAdvisoryReport,
@@ -149,3 +150,11 @@ class BusinessStrategyDecisionAdmin(admin.ModelAdmin):
 class BusinessAdvisoryReportAdmin(ReadOnlyIntelligenceAdmin):
     list_display = ("provider", "model_name", "created_at")
     list_filter = ("provider",)
+
+
+@admin.register(BusinessOpportunity)
+class BusinessOpportunityAdmin(admin.ModelAdmin):
+    list_display = ("name", "stage", "source", "proposed_amount", "currency", "updated_at")
+    list_filter = ("stage", "source", "currency")
+    search_fields = ("name", "client__name", "next_action")
+    readonly_fields = ("created_at", "updated_at")

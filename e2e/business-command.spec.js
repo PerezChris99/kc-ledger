@@ -65,3 +65,36 @@ test("business command analyzes cash, goals, previous strategies and client pitc
     await expect(page.getByText("Local business advisor")).toBeVisible();
     await page.screenshot({ path: "test-results/business-command.png", fullPage: true });
 });
+
+
+test("owner records a real proposal and corrects its outcome without booking false cash", async ({ page }) => {
+    await signIn(page);
+    const unique = "Recorded sales proposal " + Date.now().toString(36);
+    await page.getByRole("navigation", { name: "Main navigation" })
+        .getByRole("button", { name: "Intelligence", exact: true }).click();
+    await page.getByRole("tab", { name: "Sales pipeline" }).click();
+    await expect(page.getByText("OBSERVED SALES FUNNEL")).toBeVisible();
+
+    await page.getByLabel("PROSPECT OR PROPOSAL").fill(unique);
+    await page.getByLabel("ACQUISITION SOURCE").selectOption("referral");
+    await page.getByLabel("QUOTED VALUE").fill("950");
+    await page.getByLabel("NEXT VERIFIABLE ACTION").fill("Discuss scope and deposit terms");
+    await page.getByRole("button", { name: "Add to sales pipeline" }).click();
+    await expect(page.getByText(unique)).toBeVisible();
+
+    const record = page.locator(".command-opportunity").filter({ hasText: unique });
+    await record.getByLabel("STATUS").selectOption("proposed");
+    await record.getByRole("button", { name: "Save outcome" }).click();
+    await expect(page.getByText("Observed stage and next action saved", { exact: false }))
+        .toBeVisible();
+    await expect(record.getByLabel("STATUS")).toHaveValue("proposed");
+
+    await record.getByLabel("STATUS").selectOption("lost");
+    await record.getByLabel("RECORDED LOSS REASON").fill("Budget was not approved");
+    await record.getByRole("button", { name: "Save outcome" }).click();
+    await expect(record.getByLabel("STATUS")).toHaveValue("lost");
+    await expect(record.getByText(/closed /)).toBeVisible();
+
+    await page.getByRole("tab", { name: "Advisor & challenge" }).click();
+    await expect(page.getByText("Ranked strategy experiments")).toBeVisible();
+});
