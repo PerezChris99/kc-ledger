@@ -55,6 +55,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "ledger.middleware.PrivateResponseCacheMiddleware",
     "ledger.middleware.ApiRequestLimitsMiddleware",
     "ledger.middleware.DatabaseCutoverGuardMiddleware",
     "ledger.middleware.MinimumVersionMiddleware",

@@ -1,6 +1,20 @@
-"""Bound API request sizes on both Docker and native desktop runtimes."""
+"""Shared HTTP policies for KC Ledger runtimes."""
 
 from django.http import HttpResponse, HttpResponseBadRequest
+from django.utils.cache import add_never_cache_headers
+
+
+class PrivateResponseCacheMiddleware:
+    """Keep session and ledger responses out of HTTP caches on every runtime."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if request.path.startswith(("/api/", "/admin/")):
+            add_never_cache_headers(response)
+        return response
 
 
 class ApiRequestLimitsMiddleware:
