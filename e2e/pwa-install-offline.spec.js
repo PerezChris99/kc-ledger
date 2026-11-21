@@ -56,7 +56,7 @@ test("installed app shell loads offline without storing private ledger API respo
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText("OFFLINE MODE")).toBeVisible();
     await expect(page.getByText(/No financial data is being cached/)).toBeVisible();
-    await expect(page.locator("main").getByText(/backend/)).toBeVisible();
+    await expect(page.locator("main").getByText(/live server/)).toBeVisible();
     await context.setOffline(false);
     await page.reload();
     await expect(page.getByLabel("USERNAME")).toBeVisible();
