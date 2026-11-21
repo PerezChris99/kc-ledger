@@ -411,10 +411,7 @@ def test_business_alerts_emit_once_and_are_visible_to_notification_polling(owner
     from ledger.jobs import emit_business_intelligence_alerts
     from ledger.models import Event
 
-    invoice(
-        paid_client, 500, timezone.localdate() - timedelta(days=14),
-        number="PROACTIVE-OVERDUE"
-    )
+    invoice(paid_client, 500, timezone.localdate() - timedelta(days=14), number="PROACTIVE-OVERDUE")
     before = Event.objects.filter(kind="business_alert_overdue_exposure").count()
     assert emit_business_intelligence_alerts() >= 1
     assert emit_business_intelligence_alerts() == 0
@@ -422,10 +419,7 @@ def test_business_alerts_emit_once_and_are_visible_to_notification_polling(owner
     since = (timezone.now() - timedelta(minutes=5)).isoformat()
     response = owner.get("/api/notifications?since=" + since)
     assert response.status_code == 200
-    assert any(
-        row["kind"] == "business_alert_overdue_exposure"
-        for row in response.json()["items"]
-    )
+    assert any(row["kind"] == "business_alert_overdue_exposure" for row in response.json()["items"])
 
 
 @pytest.mark.django_db

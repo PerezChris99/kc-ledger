@@ -290,9 +290,7 @@ def emit_business_intelligence_alerts():
         code = "business_alert_" + rule["id"]
         if len(code) > 80:
             continue
-        if Event.objects.filter(
-            kind=code, occurred_at__gte=now - timedelta(days=7)
-        ).exists():
+        if Event.objects.filter(kind=code, occurred_at__gte=now - timedelta(days=7)).exists():
             continue
         Event.objects.create(
             kind=code,
