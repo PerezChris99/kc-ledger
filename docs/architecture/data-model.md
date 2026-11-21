@@ -19,6 +19,6 @@ Amounts and prices use Django Decimal fields, not floating-point money. Rows are
 
 **Performance:** payment totals for revenue targets are grouped in SQL by invoice currency; FX conversions reuse a bounded exchange-rate lookup. Django enables PostgreSQL connection reuse (`CONN_MAX_AGE`) and health checks. Indexes are defined in `backend/ledger/models.py`.
 
-**Fallback safety:** SQLite WAL is a completely separate database. SQLite data is not copied into PostgreSQL by changing connection settings. Migration must be performed offline with a verified backup and reconciled counts and totals. See [PostgreSQL runbook](25-postgresql-and-fallback.md).
+**Fallback safety:** SQLite WAL is a completely separate database. SQLite data is not copied into PostgreSQL by changing connection settings. Migration must be performed offline with a verified backup and reconciled counts and totals. See [PostgreSQL runbook](../operations/postgresql-and-fallback.md).
 
 _Updated 2026-11-15._

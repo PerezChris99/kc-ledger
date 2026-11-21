@@ -18,7 +18,7 @@ docker compose exec api python manage.py db_status
 
 Once the services are healthy and the database reports `postgresql`, open [KC Ledger on localhost](http://127.0.0.1:8080) and sign in with your owner credentials. You can install the app from a supported browser. To shut down and keep your ledger, use `docker compose stop`. The `down -v` option deletes the database volume.
 
-**Already have a SQLite ledger?** Follow the migration and verification steps before switching databases. [Database setup and migration](docs/25-postgresql-and-fallback.md)
+**Already have a SQLite ledger?** Follow the migration and verification steps before switching databases. [Database setup and migration](docs/operations/postgresql-and-fallback.md)
 
 ## Day-to-day operations
 
@@ -47,9 +47,9 @@ The API applies these changes in one database transaction. A payment that exceed
 
 ### How to read the intelligence
 
-The **client score** uses eight factors, including payment speed, overdue exposure, and instalment discipline. You can inspect the underlying evidence and review alerts about shared patterns across clients. The core analysis runs locally. Optional Gemini or Grok advice requires owner opt-in and uses de-identified indicators. [Client intelligence](docs/28-client-intelligence.md)
+The **client score** uses eight factors, including payment speed, overdue exposure, and instalment discipline. You can inspect the underlying evidence and review alerts about shared patterns across clients. The core analysis runs locally. Optional Gemini or Grok advice requires owner opt-in and uses de-identified indicators. [Client intelligence](docs/architecture/client-intelligence.md)
 
-**Business Command** calculates cash contribution from collected payments less recorded expenses. Use it to understand cash performance; a formal profit-and-loss statement requires additional accounting records. Strategy reviews preserve their dated outcomes. Sales win share appears after five closed opportunities and describes observed results. [Business intelligence](docs/30-business-intelligence.md)
+**Business Command** calculates cash contribution from collected payments less recorded expenses. Use it to understand cash performance; a formal profit-and-loss statement requires additional accounting records. Strategy reviews preserve their dated outcomes. Sales win share appears after five closed opportunities and describes observed results. [Business intelligence](docs/architecture/business-intelligence.md)
 
 ## Where your data lives
 
@@ -61,7 +61,7 @@ The **client score** uses eight factors, including payment speed, overdue exposu
 
 Local and hosted installations maintain separate ledgers. Choose one as your business record. The browser caches the app interface, keeps private API responses out of its offline cache, and verifies the owner session on reconnect.
 
-[Windows installation](docs/23-windows-desktop.md) · [Hosted deployment](docs/31-pwa-vercel-prisma.md) · [PWA behaviour](docs/16-pwa.md)
+[Windows installation](docs/operations/windows-desktop.md) · [Hosted deployment](docs/operations/pwa-vercel-prisma.md) · [PWA behaviour](docs/features/pwa.md)
 
 ## Backups and recovery
 
@@ -86,12 +86,12 @@ flowchart TD
 
 `restore_ledger` defaults to validation only. For PostgreSQL, this checks that the archive catalogue is readable. A full restore drill verifies that the data can actually be recovered. Applying an in-place restore requires stopping the app and explicitly confirming replacement. The command takes a pre-restore safety snapshot of a readable target. If the original database is corrupt, preserve it and recover into a fresh database. Restoring a snapshot returns the whole ledger to the time it was taken.
 
-Windows upgrades also checkpoint the previous program and database before replacement. [Database recovery](docs/25-postgresql-and-fallback.md) · [Release and upgrade rollback](docs/26-updates-and-deployment.md)
+Windows upgrades also checkpoint the previous program and database before replacement. [Database recovery](docs/operations/postgresql-and-fallback.md) · [Release and upgrade rollback](docs/operations/updates-and-deployment.md)
 
 ## Development
 
 The frontend uses React, JavaScript/JSX, and Vite. Django and Django Ninja own authentication, financial transactions, and reporting. For source development, use the setup guide. The verification matrix covers backend tests, PostgreSQL integration, the frontend build, Docker, Chromium workflows, and Windows packaging.
 
-[Source setup](docs/01-setup.md) · [Architecture](docs/02-architecture.md) · [API](docs/07-api.md) · [Verification matrix](docs/24-verification-matrix.md)
+[Documentation index](docs/README.md) · [Source setup](docs/operations/setup.md) · [Architecture](docs/architecture/architecture.md) · [API](docs/architecture/api.md) · [Verification matrix](docs/operations/verification-matrix.md)
 
 Copyright © 2026 KC. All rights reserved. [Proprietary license](LICENSE)

@@ -64,6 +64,6 @@ App installation is separate from the signed Windows executable update path. The
 - **Local Docker PWA:** local Postgres 15, running through Docker Compose on `127.0.0.1:8080`. Keep Docker + DB running to use all features without internet. Always back up Docker volumes before updating/removing containers.
 - **Offline-only browser use:** intentionally limited to static shell. Full offline editing requires a separate encrypted, conflict-resolved local datastore and explicit reconciliation protocol; not safe to pretend it is implemented for a financial ledger.
 
-See [Vercel + Prisma PostgreSQL runbook](31-pwa-vercel-prisma.md) and [deployment gates](26-updates-and-deployment.md).
+See [Vercel + Prisma PostgreSQL runbook](../operations/pwa-vercel-prisma.md) and [deployment gates](../operations/updates-and-deployment.md).
 
 After a connectivity interruption, KC Ledger keeps the private workspace hidden until the server verifies the session. An expired session returns to owner sign-in.

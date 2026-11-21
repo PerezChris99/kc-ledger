@@ -26,6 +26,6 @@ flowchart LR
   A --> B[Backup archive checks]
 ```
 
-For the authoritative setup, migration and backup instructions see [docs/25](25-postgresql-and-fallback.md).
+For the authoritative setup, migration and backup instructions see [docs/25](postgresql-and-fallback.md).
 
 _Updated 2026-11-15._

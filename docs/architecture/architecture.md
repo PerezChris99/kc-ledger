@@ -30,6 +30,6 @@ flowchart LR
 - A successful `/api/health` **requires** an actual `SELECT 1` against the configured authoritative database; it returns 503 when that database is unavailable.
 - Django sessions, payments, allocations, events, targets and scheduled jobs use only the active backend. No client-facing fake data or split-brain offline writes.
 - PostgreSQL backups use `pg_dump` custom archives; SQLite backups use the native online backup API. Restores are explicit and require operator confirmation.
-- The former SQLite-only architecture is historical. See the [migration and fallback runbook](25-postgresql-and-fallback.md).
+- The former SQLite-only architecture is historical. See the [migration and fallback runbook](../operations/postgresql-and-fallback.md).
 
 _Updated 2026-11-15._

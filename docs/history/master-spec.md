@@ -1,4 +1,4 @@
-> **CURRENT IMPLEMENTATION NOTICE (2026-11-15):** This document preserves the original 2026-10-28 product and acceptance specification as historical planning material. Its claims that TypeScript, WeasyPrint, a dark-first theme, or an unbuilt Windows desktop are the current implementation are **superseded**. The merged application uses React JavaScript/JSX, the KC light-paper design, ReportLab PDF, Django/SQLite and a packaged Windows/WebView2 host. Consult [README](../README.md), [implemented architecture](02-architecture.md), [design](08-design-system.md), [current backlog](19-backlog.md), [production runbook](21-production-readiness.md) and [verification matrix](24-verification-matrix.md) for the authoritative present-day status. Original ambitions that have not been implemented are *not* certified complete by this notice.
+> **CURRENT IMPLEMENTATION NOTICE (2026-11-15):** This document preserves the original 2026-10-28 product and acceptance specification as historical planning material. Its claims that TypeScript, WeasyPrint, a dark-first theme, or an unbuilt Windows desktop are the current implementation are **superseded**. The merged application uses React JavaScript/JSX, the KC light-paper design, ReportLab PDF, Django/SQLite and a packaged Windows/WebView2 host. Consult [README](../../README.md), [implemented architecture](../architecture/architecture.md), [design](../architecture/design-system.md), [current backlog](backlog.md), [production runbook](../operations/production-readiness.md) and [verification matrix](../operations/verification-matrix.md) for the authoritative present-day status. Original ambitions that have not been implemented are *not* certified complete by this notice.
 
 ---
 
@@ -1324,13 +1324,13 @@ Two branches: `main` (always deployable) and `perez` (feature branch).
 Every phase is developed on `perez`, then merged to `main` with a merge
 commit after the green checklist passes.
 
-See [`docs/18-version-control.md`](docs/18-version-control.md).
+See [`docs/18-version-control.md`](../operations/version-control.md).
 
 ---
 
 ## Documentation
 
-Every feature has a doc. Start at [`docs/00-master-spec.md`](docs/00-master-spec.md).
+Every feature has a doc. Start at [`docs/00-master-spec.md`](master-spec.md).
 
 ---
 

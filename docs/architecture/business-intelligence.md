@@ -58,7 +58,7 @@ Cash metrics now exclude future-dated payments, expenses, time entries and futur
 
 A small single-business opportunity pipeline (migration 0009) records lead source, factual stage, quoted amount, next action and actual won/lost outcome. A quote is never booked as revenue, invoice or payment. Won/closed descriptive percentage is displayed only after at least **five closed cases**; it is not an individualized conversion prediction. Neutral audited events record stage changes and corrections. The deterministic advisor can flag stale leads and poor documented conversion, with source/volume caveats.
 
-See [scope-limited deep audit](32-intelligence-pwa-audit.md).
+See [scope-limited deep audit](../history/intelligence-pwa-audit.md).
 
 ## Goals, strategy experiments, and self-correction
 

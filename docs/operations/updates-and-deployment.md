@@ -72,4 +72,4 @@ To roll back the web deployment, stage/promote the previous compatible Vercel bu
 
 `npm run build` generates and verifies the PWA manifest, 192/512/maskable PNG assets, service worker and cached static shell. The staged Vercel smoke test now checks the actual delivered PWA assets in addition to Django API health and exact Git SHA before promotion. Ledger/API responses are never cached offline; pending form edits must be saved before accepting an SW update.
 
-For cloud vs loopback installation, full local operations and database costs see [PWA operations](16-pwa.md) and [Vercel + Prisma runbook](31-pwa-vercel-prisma.md). Provisioning/secrets remain external, and commercial Vercel use requires a plan permitting business applications.
+For cloud vs loopback installation, full local operations and database costs see [PWA operations](../features/pwa.md) and [Vercel + Prisma runbook](pwa-vercel-prisma.md). Provisioning/secrets remain external, and commercial Vercel use requires a plan permitting business applications.

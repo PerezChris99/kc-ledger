@@ -4,7 +4,7 @@
 
 ## Source / local PostgreSQL
 
-1. Install PostgreSQL 15+ and create an isolated `kc_ledger` database and login role; see [database runbook](25-postgresql-and-fallback.md).
+1. Install PostgreSQL 15+ and create an isolated `kc_ledger` database and login role; see [database runbook](postgresql-and-fallback.md).
 2. Copy `.env.example` to `.env`. Supply real `DJANGO_SECRET_KEY`, owner credentials, and `LEDGER_DB_PASSWORD`; keep it out of Git.
 3. Use Python 3.12 and Node.js 22.
 
@@ -33,7 +33,7 @@ To seed **fictional** test data only: `docker compose exec api python manage.py 
 
 ## Windows desktop
 
-Build using `desktop/build_windows.ps1` on Windows 10/11 x64 with Python 3.12, Node 22, Inno Setup 6. The installed application reads PostgreSQL credentials from `%LOCALAPPDATA%\KCLedger\.env`. The native process prefers PostgreSQL; SQLite is selected and **pinned** only when necessary and explicitly permitted, or if there is pre-existing SQLite data. The installer retains per-user financial data. See [desktop architecture](22-desktop-app.md) and [database runbook](25-postgresql-and-fallback.md).
+Build using `desktop/build_windows.ps1` on Windows 10/11 x64 with Python 3.12, Node 22, Inno Setup 6. The installed application reads PostgreSQL credentials from `%LOCALAPPDATA%\KCLedger\.env`. The native process prefers PostgreSQL; SQLite is selected and **pinned** only when necessary and explicitly permitted, or if there is pre-existing SQLite data. The installer retains per-user financial data. See [desktop architecture](../architecture/desktop-app.md) and [database runbook](postgresql-and-fallback.md).
 
 ## Verification
 
@@ -50,6 +50,6 @@ npm run build
 
 Use `LEDGER_DB_ENGINE=sqlite` only for intentional fallback or isolated tests. Do not expect automatic PostgreSQL/SQLite synchronization. Backup before upgrades; never commit `.env`, database files, customer financial records, or passwords.
 
-See [operations](21-production-readiness.md), [verification](24-verification-matrix.md) and [troubleshooting](20-troubleshooting.md).
+See [operations](production-readiness.md), [verification](verification-matrix.md) and [troubleshooting](troubleshooting.md).
 
 _Updated 2026-11-15 for PostgreSQL-first operation._

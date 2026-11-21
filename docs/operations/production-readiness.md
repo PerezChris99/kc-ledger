@@ -44,6 +44,6 @@ CI has independent SQLite and PostgreSQL backend jobs, a PostgreSQL service/back
 
 Do not expose this locally designed app to the public internet without a separately reviewed TLS and access model. Do not infer a 100% correct database connection to a user's PC from a hosted CI PostgreSQL service.
 
-See [PostgreSQL & fallback runbook](25-postgresql-and-fallback.md), [verification matrix](24-verification-matrix.md), and [Windows packaging](23-windows-desktop.md).
+See [PostgreSQL & fallback runbook](postgresql-and-fallback.md), [verification matrix](verification-matrix.md), and [Windows packaging](windows-desktop.md).
 
 _Updated 2026-11-15._
