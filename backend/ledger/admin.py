@@ -1,10 +1,10 @@
 from django.contrib import admin
 
 from .models import (
-    Client,
+    BusinessAdvisoryReport,
     BusinessObjective,
     BusinessStrategyDecision,
-    BusinessAdvisoryReport,
+    Client,
     ClientAdvisoryReport,
     ClientIntelligenceObservation,
     ClientIntelligenceProfile,

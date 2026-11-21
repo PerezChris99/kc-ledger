@@ -76,6 +76,7 @@ def _provider_prompt(features):
         + json.dumps(features, separators=(",", ":"), ensure_ascii=True)
     )
 
+
 def _parse_response(text):
     if not isinstance(text, str) or len(text) > 12000:
         raise AdviceUnavailable("Provider returned an invalid response")

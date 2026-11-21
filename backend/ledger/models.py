@@ -539,17 +539,17 @@ class BusinessStrategyDecision(models.Model):
     rationale = models.TextField(blank=True)
     expected_effect = models.CharField(max_length=280, blank=True)
     objective = models.ForeignKey(
-        BusinessObjective, null=True, blank=True, on_delete=models.SET_NULL,
-        related_name="decisions"
+        BusinessObjective,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="decisions",
     )
     client = models.ForeignKey(
-        Client, null=True, blank=True, on_delete=models.SET_NULL,
-        related_name="strategy_decisions"
+        Client, null=True, blank=True, on_delete=models.SET_NULL, related_name="strategy_decisions"
     )
     metric = models.CharField(max_length=32, choices=BusinessObjective.Metric.choices)
-    baseline = models.DecimalField(
-        max_digits=18, decimal_places=2, null=True, blank=True
-    )
+    baseline = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     started_on = models.DateField()
     review_on = models.DateField()
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PLANNED)

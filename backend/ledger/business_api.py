@@ -1,9 +1,9 @@
 """Owner-governed business intelligence and strategy experiment ledger API."""
 
+import json
 from datetime import date, timedelta
 from decimal import Decimal
 from hashlib import sha256
-import json
 
 from django.db import transaction
 from django.utils import timezone
@@ -76,8 +76,9 @@ class BusinessAdviceIn(Schema):
 def _safe_text(value, limit, name, required=False):
     cleaned = value.strip()
     if len(cleaned) > limit or (required and not cleaned):
-        raise HttpError(422, f"{name} must have 1–{limit} characters." if required
-                        else f"{name} is too long.")
+        raise HttpError(
+            422, f"{name} must have 1–{limit} characters." if required else f"{name} is too long."
+        )
     return cleaned
 
 
@@ -87,7 +88,7 @@ def _check_metric(metric):
 
 
 def _validate_target(value):
-    if not value.is_finite() or abs(value) > Decimal("999999999999999"):
+    if not value.is_finite() or abs(value) > Decimal(999999999999999):
         raise HttpError(422, "Target is not a finite supported amount.")
     if value.as_tuple().exponent < -2:
         raise HttpError(422, "Targets support up to two decimal places.")
@@ -115,21 +116,20 @@ def _record_audit(kind, title, detail, client=None):
 
 def _portfolio(include_decisions=True):
     snapshot = build_business_snapshot()
-    objectives = list(
-        BusinessObjective.objects.order_by("due_date", "id")[:100]
+    objectives = list(BusinessObjective.objects.order_by("due_date", "id")[:100])
+    decisions = (
+        list(
+            BusinessStrategyDecision.objects.select_related("client", "objective").order_by(
+                "-created_at"
+            )[:150]
+        )
+        if include_decisions
+        else []
     )
-    decisions = list(
-        BusinessStrategyDecision.objects.select_related("client", "objective")
-        .order_by("-created_at")[:150]
-    ) if include_decisions else []
-    result = {
-        key: value for key, value in snapshot.items() if key != "metric_values"
-    }
+    result = {key: value for key, value in snapshot.items() if key != "metric_values"}
     result["objectives"] = [objective_progress(row, snapshot) for row in objectives]
     result["decisions"] = [decision_review(row, snapshot) for row in decisions]
-    result["recommendations"] = prioritize_goals_and_decisions(
-        snapshot, objectives, decisions
-    )
+    result["recommendations"] = prioritize_goals_and_decisions(snapshot, objectives, decisions)
     result["provider_status"] = public_availability()
     result["scope"] = "business-operations"
     result["methodology"] = (
@@ -164,14 +164,12 @@ def business_scenario(
     expenses_pct: float = 0,
 ):
     if (
-        not -40 <= pricing_pct <= 100 or
-        not -40 <= collection_pct <= 100 or
-        not -80 <= expenses_pct <= 100
+        not -40 <= pricing_pct <= 100
+        or not -40 <= collection_pct <= 100
+        or not -80 <= expenses_pct <= 100
     ):
         raise HttpError(422, "Scenario levers exceed permitted ranges.")
-    if any(not Decimal(str(n)).is_finite() for n in (
-        pricing_pct, collection_pct, expenses_pct
-    )):
+    if any(not Decimal(str(n)).is_finite() for n in (pricing_pct, collection_pct, expenses_pct)):
         raise HttpError(422, "Scenario inputs must be finite numbers.")
     return simulate(
         build_business_snapshot(),
@@ -189,7 +187,8 @@ def create_objective(request, payload: ObjectiveIn):
     description = _safe_text(payload.description, 800, "Objective description")
     target = _validate_target(payload.target)
     if (
-        payload.metric in METRIC_MINIMIZE.union(
+        payload.metric
+        in METRIC_MINIMIZE.union(
             {BusinessObjective.Metric.ACTIVE_CLIENTS, BusinessObjective.Metric.MONTHLY_RECEIPTS}
         )
         and target < 0
@@ -202,11 +201,15 @@ def create_objective(request, payload: ObjectiveIn):
     if payload.due_date > timezone.localdate() + timedelta(days=1825):
         raise HttpError(422, "Objective deadlines must be within five years.")
     item = BusinessObjective.objects.create(
-        name=name, metric=payload.metric, target=target,
-        due_date=payload.due_date, description=description
+        name=name,
+        metric=payload.metric,
+        target=target,
+        due_date=payload.due_date,
+        description=description,
     )
     _record_audit(
-        "business_objective_created", "Business objective recorded",
+        "business_objective_created",
+        "Business objective recorded",
         f"Goal {item.id}: {item.metric} target {amount(item.target)}.",
     )
     return {"id": item.id, "status": item.status}
@@ -224,7 +227,8 @@ def update_objective(request, objective_id: int, payload: ObjectiveUpdate):
     row.status = payload.status
     row.save(update_fields=["status", "updated_at"])
     _record_audit(
-        "business_objective_status", "Business objective status updated",
+        "business_objective_status",
+        "Business objective status updated",
         f"Goal {row.id} changed to {row.status}.",
     )
     return {"id": row.id, "status": row.status}
@@ -267,23 +271,33 @@ def create_strategy_decision(request, payload: StrategyIn):
     # A historical baseline cannot be reconstructed honestly from a live snapshot.
     baseline = current if start == timezone.localdate() and no_fx_gap else None
     row = BusinessStrategyDecision.objects.create(
-        title=title, kind=payload.kind, rationale=rationale,
-        expected_effect=expected, metric=payload.metric,
-        objective=objective, client=client, baseline=baseline,
-        started_on=start, review_on=payload.review_on,
+        title=title,
+        kind=payload.kind,
+        rationale=rationale,
+        expected_effect=expected,
+        metric=payload.metric,
+        objective=objective,
+        client=client,
+        baseline=baseline,
+        started_on=start,
+        review_on=payload.review_on,
         status=BusinessStrategyDecision.Status.ACTIVE
-        if start <= timezone.localdate() else BusinessStrategyDecision.Status.PLANNED,
+        if start <= timezone.localdate()
+        else BusinessStrategyDecision.Status.PLANNED,
     )
     _record_audit(
-        "business_strategy_created", "Business strategy recorded",
+        "business_strategy_created",
+        "Business strategy recorded",
         f"Strategy {row.id}: {row.kind} / {row.metric}; review {row.review_on}.",
         client=client,
     )
     return {
-        "id": row.id, "status": row.status,
+        "id": row.id,
+        "status": row.status,
         "baseline": amount(baseline) if baseline is not None else None,
         "note": "Historical baselines are left unknown rather than fabricated."
-        if baseline is None else "Baseline captured from the current recorded ledger.",
+        if baseline is None
+        else "Baseline captured from the current recorded ledger.",
     }
 
 
@@ -301,7 +315,8 @@ def review_strategy_decision(request, decision_id: int, payload: StrategyReview)
     row.outcome_note = outcome
     row.save(update_fields=["status", "outcome_note", "updated_at"])
     _record_audit(
-        "business_strategy_reviewed", "Business strategy reviewed",
+        "business_strategy_reviewed",
+        "Business strategy reviewed",
         f"Strategy {row.id} moved to {row.status}.",
         client=row.client,
     )
@@ -320,12 +335,12 @@ def _anonymized_business_context(snapshot, objectives, decisions):
         "receipt_count": metrics["receipt_count"],
         "expense_count": metrics["expense_count"],
         "active_client_count": metrics["active_clients"],
-        "expenses_to_receipts_pct": round(
-            float(expenses / collected * 100), 1
-        ) if collected else None,
-        "overdue_to_unpaid_pct": round(
-            float(Decimal(metrics["overdue"]) / outstanding * 100), 1
-        ) if outstanding else None,
+        "expenses_to_receipts_pct": round(float(expenses / collected * 100), 1)
+        if collected
+        else None,
+        "overdue_to_unpaid_pct": round(float(Decimal(metrics["overdue"]) / outstanding * 100), 1)
+        if outstanding
+        else None,
         "top_client_receipts_pct": metrics["top_client_share_pct"],
         "has_missing_fx": bool(snapshot["data_quality"]["missing_fx"]),
         "expense_capture_verified": False,
@@ -339,7 +354,8 @@ def _anonymized_business_context(snapshot, objectives, decisions):
                 "is_met": row["favorable"],
                 "days_remaining": row["days_remaining"],
             }
-            for row in objectives if row["status"] == BusinessObjective.Status.ACTIVE
+            for row in objectives
+            if row["status"] == BusinessObjective.Status.ACTIVE
         ][:15],
         "strategy_outcomes": [
             {
@@ -364,11 +380,11 @@ def business_advice(request, payload: BusinessAdviceIn):
     overview, snapshot = _portfolio()
     if payload.provider == "local":
         return {
-            "provider": "local", "model": "business-rules-v1",
+            "provider": "local",
+            "model": "business-rules-v1",
             "summary": (
                 "Insufficient financial history for reliable trend analysis."
-                if snapshot["metrics"]["receipt_count"] +
-                snapshot["metrics"]["expense_count"] < 3
+                if snapshot["metrics"]["receipt_count"] + snapshot["metrics"]["expense_count"] < 3
                 else "Review these evidence-backed business priorities."
             ),
             "actions": [row["action"] for row in overview["recommendations"][:8]],
@@ -381,27 +397,26 @@ def business_advice(request, payload: BusinessAdviceIn):
     if (
         BusinessAdvisoryReport.objects.filter(
             created_at__gte=timezone.now() - timedelta(minutes=1)
-        ).count() +
-        ClientAdvisoryReport.objects.filter(
-            provider__in=["gemini", "grok"],
-            created_at__gte=timezone.now() - timedelta(minutes=1)
-        ).count() >= 3
+        ).count()
+        + ClientAdvisoryReport.objects.filter(
+            provider__in=["gemini", "grok"], created_at__gte=timezone.now() - timedelta(minutes=1)
+        ).count()
+        >= 3
     ):
         raise HttpError(429, "Model advice rate limit reached.")
-    evidence = _anonymized_business_context(
-        snapshot, overview["objectives"], overview["decisions"]
-    )
+    evidence = _anonymized_business_context(snapshot, overview["objectives"], overview["decisions"])
     try:
         model, result = request_advice(payload.provider, evidence)
     except AdviceUnavailable as exc:
         raise HttpError(503, str(exc)) from exc
     signature = sha256(json.dumps(evidence, sort_keys=True).encode()).hexdigest()
     BusinessAdvisoryReport.objects.create(
-        provider=payload.provider, model_name=model,
-        evidence_signature=signature, advice=result
+        provider=payload.provider, model_name=model, evidence_signature=signature, advice=result
     )
     return {
-        "provider": payload.provider, "model": model, "advice": result,
+        "provider": payload.provider,
+        "model": model,
+        "advice": result,
         "disclaimer": (
             "External second opinion, not business forecasts or verified financial advice. "
             "No ledger, goal, client classification or strategy record was modified."

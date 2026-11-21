@@ -7,7 +7,7 @@ illustrative, never guaranteed, and no model is allowed to write source data.
 
 from collections import Counter, defaultdict
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from statistics import median
 
 from django.utils import timezone
@@ -24,8 +24,8 @@ from ledger.models import (
 )
 from ledger.services.fx import conversion_for
 
-ZERO = Decimal("0")
-ONE = Decimal("1")
+ZERO = Decimal(0)
+ONE = Decimal(1)
 CENT = Decimal("0.01")
 METRIC_MAXIMIZE = {
     BusinessObjective.Metric.MONTHLY_RECEIPTS,
@@ -83,12 +83,8 @@ def _rough_forecast(monthly):
     receipts = [Decimal(m["receipts"]) for m in past]
     costs = [Decimal(m["expenses"]) for m in past]
     r, c = _median(receipts), _median(costs)
-    spread_receipts = max(
-        _median([abs(value - r) for value in receipts]), r * Decimal("0.25")
-    )
-    spread_costs = max(
-        _median([abs(value - c) for value in costs]), c * Decimal("0.25")
-    )
+    spread_receipts = max(_median([abs(value - r) for value in receipts]), r * Decimal("0.25"))
+    spread_costs = max(_median([abs(value - c) for value in costs]), c * Decimal("0.25"))
     low = max(ZERO, r - spread_receipts) - (c + spread_costs)
     high = r + spread_receipts - max(ZERO, c - spread_costs)
     return {
@@ -133,9 +129,7 @@ def _monthly_anomalies(monthly):
         threshold = max(baseline * Decimal("0.30"), mad * 3)
         if abs(distance) <= threshold:
             continue
-        adverse = (metric == "receipts" and distance < 0) or (
-            metric == "expenses" and distance > 0
-        )
+        adverse = (metric == "receipts" and distance < 0) or (metric == "expenses" and distance > 0)
         rows.append(
             {
                 "id": metric + "_deviation",
@@ -168,8 +162,11 @@ def build_business_snapshot(as_of=None, base=None):
     months = [_shift_month(today, offset) for offset in range(-12, 1)]
     monthly = {
         _month(day): {
-            "month": _month(day), "receipts": ZERO, "expenses": ZERO,
-            "receipt_count": 0, "expense_count": 0,
+            "month": _month(day),
+            "receipts": ZERO,
+            "expenses": ZERO,
+            "receipt_count": 0,
+            "expense_count": 0,
         }
         for day in months
     }
@@ -189,8 +186,8 @@ def build_business_snapshot(as_of=None, base=None):
     invoice_status = Counter()
     receipts_count = expenses_count = 0
 
-    for payment in Payment.objects.select_related("invoice", "client").all().iterator(
-        chunk_size=400
+    for payment in (
+        Payment.objects.select_related("invoice", "client").all().iterator(chunk_size=400)
     ):
         paid_by_invoice[payment.invoice_id] += payment.amount
         value = convert(payment.amount, payment.invoice.currency)
@@ -224,9 +221,11 @@ def build_business_snapshot(as_of=None, base=None):
             month["expenses"] += value
             month["expense_count"] += 1
 
-    for row in TimeEntry.objects.all().values(
-        "client_id", "engagement_id", "hours", "category"
-    ).iterator(chunk_size=400):
+    for row in (
+        TimeEntry.objects.all()
+        .values("client_id", "engagement_id", "hours", "category")
+        .iterator(chunk_size=400)
+    ):
         client_hours[row["client_id"]] += row["hours"]
         engagement_hours[row["engagement_id"]] += row["hours"]
 
@@ -255,9 +254,12 @@ def build_business_snapshot(as_of=None, base=None):
             if balance > ZERO:
                 age = (today - invoice.due_date).days
                 aging = (
-                    "not_due" if age <= 0
-                    else "1_30" if age <= 30
-                    else "31_60" if age <= 60
+                    "not_due"
+                    if age <= 0
+                    else "1_30"
+                    if age <= 30
+                    else "31_60"
+                    if age <= 60
                     else "61_plus"
                 )
                 outstanding_aging[aging] += balance
@@ -290,20 +292,21 @@ def build_business_snapshot(as_of=None, base=None):
         rec, costs = client_receipts[cid], client_expenses[cid]
         contributions.append(
             {
-                "id": cid, "client": item["name"], "status": item["status"],
+                "id": cid,
+                "client": item["name"],
+                "status": item["status"],
                 "score": item["score"],
-                "receipts": amount(rec), "direct_expenses": amount(costs),
+                "receipts": amount(rec),
+                "direct_expenses": amount(costs),
                 "direct_cash_contribution": amount(rec - costs),
                 "outstanding_overdue": amount(client_overdue[cid]),
                 "logged_hours": amount(client_hours[cid]),
-                "cash_per_hour": amount(rec / client_hours[cid])
-                if client_hours[cid] else None,
+                "cash_per_hour": amount(rec / client_hours[cid]) if client_hours[cid] else None,
             }
         )
     contributions.sort(key=lambda row: Decimal(row["receipts"]), reverse=True)
     top_share = (
-        Decimal(contributions[0]["receipts"]) / collected
-        if contributions and collected else ZERO
+        Decimal(contributions[0]["receipts"]) / collected if contributions and collected else ZERO
     )
     project_rows = []
     for eng in Engagement.objects.select_related("client").all():
@@ -336,85 +339,128 @@ def build_business_snapshot(as_of=None, base=None):
     }
     rules = []
     if receipts_count + expenses_count == 0:
-        rules.append(_rule(
-            "unmeasured_cash", "high", "Business cash performance is not measurable yet",
-            "No recorded payment or expense entries can be converted.",
-            "Record all receipts and costs before drawing financial conclusions.",
-            "Do not conclude that zero expenses means the business is profitable.",
-            "insufficient",
-        ))
+        rules.append(
+            _rule(
+                "unmeasured_cash",
+                "high",
+                "Business cash performance is not measurable yet",
+                "No recorded payment or expense entries can be converted.",
+                "Record all receipts and costs before drawing financial conclusions.",
+                "Do not conclude that zero expenses means the business is profitable.",
+                "insufficient",
+            )
+        )
     if incomplete_fx:
-        rules.append(_rule(
-            "fx_gaps", "high", "Financial totals are incomplete",
-            f"Missing conversion rates: {', '.join(sorted(incomplete_fx))}.",
-            "Configure verified currency conversion pairs and recalculate before decisions.",
-            "Do not compare mixed currencies or treat excluded amounts as zero.",
-        ))
+        rules.append(
+            _rule(
+                "fx_gaps",
+                "high",
+                "Financial totals are incomplete",
+                f"Missing conversion rates: {', '.join(sorted(incomplete_fx))}.",
+                "Configure verified currency conversion pairs and recalculate before decisions.",
+                "Do not compare mixed currencies or treat excluded amounts as zero.",
+            )
+        )
     if inconsistent_invoice_count:
-        rules.append(_rule(
-            "invoice_integrity", "high", "Invoice settlement inconsistencies require review",
-            f"{inconsistent_invoice_count} paid-status / amount mismatch(es).",
-            "Reconcile individual invoices and payment allocations against source records.",
-            "Do not base collection strategy on unreconciled settlements.",
-        ))
+        rules.append(
+            _rule(
+                "invoice_integrity",
+                "high",
+                "Invoice settlement inconsistencies require review",
+                f"{inconsistent_invoice_count} paid-status / amount mismatch(es).",
+                "Reconcile individual invoices and payment allocations against source records.",
+                "Do not base collection strategy on unreconciled settlements.",
+            )
+        )
     if cash_result < ZERO and receipts_count + expenses_count:
-        rules.append(_rule(
-            "negative_cash", "high", "Recorded outflows exceed receipts",
-            f"Recorded receipts {amount(collected)} less recorded expenses {amount(expenses)} = {amount(cash_result)} {base}.",
-            "Inspect largest cost categories, speed up legitimate collections and protect cash commitments.",
-            "Do not assume revenue bookings or unpaid invoices cover outgoing cash.",
-        ))
+        rules.append(
+            _rule(
+                "negative_cash",
+                "high",
+                "Recorded outflows exceed receipts",
+                f"Recorded receipts {amount(collected)} less recorded expenses {amount(expenses)} = {amount(cash_result)} {base}.",
+                "Inspect largest cost categories, speed up legitimate collections and protect cash commitments.",
+                "Do not assume revenue bookings or unpaid invoices cover outgoing cash.",
+            )
+        )
     if outstanding > ZERO and overdue / outstanding >= Decimal("0.3"):
-        rules.append(_rule(
-            "overdue_exposure", "high", "A large share of unpaid invoices is overdue",
-            f"{amount(overdue)} {base} overdue out of {amount(outstanding)} {base} unpaid.",
-            "Segment overdue invoices by age, contact payers, and ask for dated settlement plans.",
-            "Do not continue unsecured work without reviewing payment exposure.",
-        ))
-    if len([row for row in contributions if Decimal(row["receipts"]) > ZERO]) >= 2 and top_share > Decimal("0.45"):
-        rules.append(_rule(
-            "revenue_concentration", "medium", "Cash receipts depend heavily on one client",
-            f"Top client's share of recorded receipts is {float(top_share * 100):.1f}%.",
-            "Develop additional qualified clients and retain clear agreements with major accounts.",
-            "Do not assume the largest current payer guarantees future income.",
-        ))
+        rules.append(
+            _rule(
+                "overdue_exposure",
+                "high",
+                "A large share of unpaid invoices is overdue",
+                f"{amount(overdue)} {base} overdue out of {amount(outstanding)} {base} unpaid.",
+                "Segment overdue invoices by age, contact payers, and ask for dated settlement plans.",
+                "Do not continue unsecured work without reviewing payment exposure.",
+            )
+        )
+    if len(
+        [row for row in contributions if Decimal(row["receipts"]) > ZERO]
+    ) >= 2 and top_share > Decimal("0.45"):
+        rules.append(
+            _rule(
+                "revenue_concentration",
+                "medium",
+                "Cash receipts depend heavily on one client",
+                f"Top client's share of recorded receipts is {float(top_share * 100):.1f}%.",
+                "Develop additional qualified clients and retain clear agreements with major accounts.",
+                "Do not assume the largest current payer guarantees future income.",
+            )
+        )
     if expenses and collected and expenses / collected >= Decimal("0.8"):
-        rules.append(_rule(
-            "cash_cost_pressure", "medium", "Expenses absorb most recorded receipts",
-            f"Recorded costs equal {float(expenses / collected * 100):.1f}% of receipts.",
-            "Break down spending by category; review low-return work and unavoidable overhead.",
-            "Do not cut essential delivery capacity without evaluating service impact.",
-        ))
+        rules.append(
+            _rule(
+                "cash_cost_pressure",
+                "medium",
+                "Expenses absorb most recorded receipts",
+                f"Recorded costs equal {float(expenses / collected * 100):.1f}% of receipts.",
+                "Break down spending by category; review low-return work and unavoidable overhead.",
+                "Do not cut essential delivery capacity without evaluating service impact.",
+            )
+        )
     for anomaly in anomaly_rows:
         if anomaly["severity"] == "warning":
-            rules.append(_rule(
-                "anomaly_" + anomaly["id"], "medium", anomaly["description"],
-                f"{anomaly['month']}: {anomaly['metric']} changed {anomaly['change_pct']}% from the three-month median.",
-                "Investigate source transactions and one-off effects before adapting the plan.",
-                "Do not extrapolate a single unusual month into a guaranteed trend.",
-                "limited",
-            ))
+            rules.append(
+                _rule(
+                    "anomaly_" + anomaly["id"],
+                    "medium",
+                    anomaly["description"],
+                    f"{anomaly['month']}: {anomaly['metric']} changed {anomaly['change_pct']}% from the three-month median.",
+                    "Investigate source transactions and one-off effects before adapting the plan.",
+                    "Do not extrapolate a single unusual month into a guaranteed trend.",
+                    "limited",
+                )
+            )
     if receipts_count and not expenses_count:
-        rules.append(_rule(
-            "cost_coverage", "high", "Expenses may be missing",
-            "Recorded receipts exist, but no expense entries are present.",
-            "Capture vendor bills, software subscriptions, taxes and other real costs.",
-            "Do not present collected cash as net profit.",
-            "insufficient",
-        ))
+        rules.append(
+            _rule(
+                "cost_coverage",
+                "high",
+                "Expenses may be missing",
+                "Recorded receipts exist, but no expense entries are present.",
+                "Capture vendor bills, software subscriptions, taxes and other real costs.",
+                "Do not present collected cash as net profit.",
+                "insufficient",
+            )
+        )
     if active_clients and receipts_count:
         low_clients = [
-            row for row in contributions
-            if row["status"] == Client.Status.ACTIVE and
-            Decimal(row["direct_cash_contribution"]) < ZERO
+            row
+            for row in contributions
+            if row["status"] == Client.Status.ACTIVE
+            and Decimal(row["direct_cash_contribution"]) < ZERO
         ]
         if low_clients:
-            rules.append(_rule(
-                "negative_client_cash", "medium", "Some clients have negative direct cash contribution",
-                f"{len(low_clients)} active client(s) have more allocated expenses than receipts.",
-                "Review their pricing, delivery scope, payment terms and whether costs were allocated correctly.",
-                "Do not call this accounting loss without allocating labor and shared overhead.",
-            ))
+            rules.append(
+                _rule(
+                    "negative_client_cash",
+                    "medium",
+                    "Some clients have negative direct cash contribution",
+                    f"{len(low_clients)} active client(s) have more allocated expenses than receipts.",
+                    "Review their pricing, delivery scope, payment terms and whether costs were allocated correctly.",
+                    "Do not call this accounting loss without allocating labor and shared overhead.",
+                )
+            )
     rules.sort(key=lambda x: ({"high": 0, "medium": 1, "low": 2}[x["priority"]], x["id"]))
     return {
         "as_of": today.isoformat(),
@@ -435,18 +481,16 @@ def build_business_snapshot(as_of=None, base=None):
             "logged_hours": amount(total_hours),
             "cash_per_logged_hour": amount(cash_per_hour) if cash_per_hour else None,
             "top_client_share_pct": round(float(top_share * 100), 1),
-            "unassigned_expenses": amount(
-                expenses - sum(client_expenses.values(), ZERO)
-            ),
+            "unassigned_expenses": amount(expenses - sum(client_expenses.values(), ZERO)),
         },
         "metric_values": metrics,
         "monthly": monthly_rows,
         "client_contribution": contributions[:100],
         "expense_categories": [
             {"category": cat, "amount": amount(value)}
-            for cat, value in sorted(
-                category_costs.items(), key=lambda item: (-item[1], item[0])
-            )[:25]
+            for cat, value in sorted(category_costs.items(), key=lambda item: (-item[1], item[0]))[
+                :25
+            ]
         ],
         "projects": project_rows[:100],
         "aging": [
@@ -484,9 +528,7 @@ def objective_progress(objective, snapshot):
         not snapshot["data_quality"]["missing_fx"] or not metric_is_currency
     )
     target = objective.target
-    favorable = (
-        current >= target if max_direction else current <= target
-    ) if available else None
+    favorable = (current >= target if max_direction else current <= target) if available else None
     delta = current - target if available else None
     return {
         "id": objective.id,
@@ -502,8 +544,10 @@ def objective_progress(objective, snapshot):
         "due_date": objective.due_date.isoformat(),
         "days_remaining": (objective.due_date - date.fromisoformat(snapshot["as_of"])).days,
         "metric_context": (
-            "Last completed calendar month" if objective.metric.startswith("monthly_")
-            else "Live ledger total" if objective.metric != BusinessObjective.Metric.CASH_PER_HOUR
+            "Last completed calendar month"
+            if objective.metric.startswith("monthly_")
+            else "Live ledger total"
+            if objective.metric != BusinessObjective.Metric.CASH_PER_HOUR
             else "All recorded receipts / all logged hours"
         ),
         "caution": "A current observation is not evidence that a strategy caused a change.",
@@ -512,14 +556,14 @@ def objective_progress(objective, snapshot):
 
 def decision_review(decision, snapshot):
     current = snapshot["metric_values"].get(decision.metric)
-    available = (
-        current is not None and
-        (not snapshot["data_quality"]["missing_fx"] or decision.metric == "active_clients")
+    available = current is not None and (
+        not snapshot["data_quality"]["missing_fx"] or decision.metric == "active_clients"
     )
     delta = current - decision.baseline if available and decision.baseline is not None else None
     favorable = (
         (delta >= ZERO if decision.metric in METRIC_MAXIMIZE else delta <= ZERO)
-        if delta is not None else None
+        if delta is not None
+        else None
     )
     return {
         "id": decision.id,
@@ -539,7 +583,8 @@ def decision_review(decision, snapshot):
         "started_on": decision.started_on.isoformat(),
         "review_on": decision.review_on.isoformat(),
         "review_due": decision.review_on <= date.fromisoformat(snapshot["as_of"])
-        and decision.status in {BusinessStrategyDecision.Status.ACTIVE, BusinessStrategyDecision.Status.PLANNED},
+        and decision.status
+        in {BusinessStrategyDecision.Status.ACTIVE, BusinessStrategyDecision.Status.PLANNED},
         "outcome_note": decision.outcome_note,
         "caution": "Before/after association, not a causal estimate; review confounders and incomplete data.",
     }
@@ -552,38 +597,46 @@ def prioritize_goals_and_decisions(snapshot, objectives, decisions):
             continue
         row = objective_progress(goal, snapshot)
         if row["favorable"] is False and row["days_remaining"] <= 30:
-            recommendations.append(_rule(
-                "goal_" + str(goal.id),
-                "medium" if row["days_remaining"] > 0 else "high",
-                "Your stated target is not yet met: " + goal.name,
-                f"{goal.metric}: current {row['current']}, target {row['target']}, due {row['due_date']}.",
-                "Compare controllable activities against the stated target; change or scale down weak tactics.",
-                "Do not declare a strategy successful just because it was executed.",
-                "limited",
-            ))
+            recommendations.append(
+                _rule(
+                    "goal_" + str(goal.id),
+                    "medium" if row["days_remaining"] > 0 else "high",
+                    "Your stated target is not yet met: " + goal.name,
+                    f"{goal.metric}: current {row['current']}, target {row['target']}, due {row['due_date']}.",
+                    "Compare controllable activities against the stated target; change or scale down weak tactics.",
+                    "Do not declare a strategy successful just because it was executed.",
+                    "limited",
+                )
+            )
     for decision in decisions:
         row = decision_review(decision, snapshot)
         if row["review_due"]:
-            recommendations.append(_rule(
-                "decision_" + str(decision.id), "medium",
-                "Review your previous strategic decision: " + decision.title,
-                f"Recorded baseline {row['baseline'] or 'unknown'}; current {row['current'] or 'unknown'}.",
-                "Document the observed result, external factors, and whether to keep, adjust or stop the tactic.",
-                "Do not claim the action caused an increase or decrease without stronger evidence.",
-                "limited",
-            ))
+            recommendations.append(
+                _rule(
+                    "decision_" + str(decision.id),
+                    "medium",
+                    "Review your previous strategic decision: " + decision.title,
+                    f"Recorded baseline {row['baseline'] or 'unknown'}; current {row['current'] or 'unknown'}.",
+                    "Document the observed result, external factors, and whether to keep, adjust or stop the tactic.",
+                    "Do not claim the action caused an increase or decrease without stronger evidence.",
+                    "limited",
+                )
+            )
         elif (
             decision.status == BusinessStrategyDecision.Status.REVIEWED
             and row["direction_favorable"] is False
         ):
-            recommendations.append(_rule(
-                "decision_correct_" + str(decision.id), "medium",
-                "The metric moved against the intention of a past decision",
-                f"{decision.title}: observed change {row['observed_change']} against a recorded baseline.",
-                "Check whether assumptions failed, and consider revising the pricing or delivery approach.",
-                "Do not repeat an underperforming tactic uncritically or assign causation from correlation.",
-                "limited",
-            ))
+            recommendations.append(
+                _rule(
+                    "decision_correct_" + str(decision.id),
+                    "medium",
+                    "The metric moved against the intention of a past decision",
+                    f"{decision.title}: observed change {row['observed_change']} against a recorded baseline.",
+                    "Check whether assumptions failed, and consider revising the pricing or delivery approach.",
+                    "Do not repeat an underperforming tactic uncritically or assign causation from correlation.",
+                    "limited",
+                )
+            )
     return sorted(
         recommendations,
         key=lambda x: ({"high": 0, "medium": 1, "low": 2}[x["priority"]], x["id"]),
@@ -595,9 +648,7 @@ def simulate(snapshot, pricing_pct=0, collection_pct=0, expenses_pct=0):
     baseline = snapshot["forecast"]
     if not baseline["available"]:
         return {"available": False, "reason": baseline["reason"]}
-    p, c, e = (Decimal(str(n)) / Decimal(100) for n in (
-        pricing_pct, collection_pct, expenses_pct
-    ))
+    p, c, e = (Decimal(str(n)) / Decimal(100) for n in (pricing_pct, collection_pct, expenses_pct))
     receipts = Decimal(baseline["receipts_baseline"]) * (ONE + p) * (ONE + c)
     costs = Decimal(baseline["expenses_baseline"]) * (ONE + e)
     return {
@@ -607,9 +658,7 @@ def simulate(snapshot, pricing_pct=0, collection_pct=0, expenses_pct=0):
         "scenario_receipts": amount(receipts),
         "scenario_expenses": amount(costs),
         "scenario_cash": amount(receipts - costs),
-        "difference": amount(
-            receipts - costs - Decimal(baseline["cash_result_baseline"])
-        ),
+        "difference": amount(receipts - costs - Decimal(baseline["cash_result_baseline"])),
         "assumptions": {
             "pricing_percent": pricing_pct,
             "collection_percent": collection_pct,
@@ -625,9 +674,7 @@ def simulate(snapshot, pricing_pct=0, collection_pct=0, expenses_pct=0):
 
 def pitch_playbook(client, snapshot):
     """Uses documented business context, not inferred personality or identity."""
-    invoices = list(
-        Invoice.objects.filter(client=client).values("status", "due_date", "amount")
-    )
+    invoices = list(Invoice.objects.filter(client=client).values("status", "due_date", "amount"))
     engagements = list(
         Engagement.objects.filter(client=client).values(
             "kind", "status", "name", "revision_limit", "revisions_used"

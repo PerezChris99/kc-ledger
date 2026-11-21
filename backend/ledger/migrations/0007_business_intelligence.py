@@ -100,9 +100,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "baseline",
-                    models.DecimalField(
-                        max_digits=18, decimal_places=2, null=True, blank=True
-                    ),
+                    models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True),
                 ),
                 ("started_on", models.DateField()),
                 ("review_on", models.DateField()),
@@ -146,12 +144,8 @@ class Migration(migrations.Migration):
             options={
                 "ordering": ["-created_at", "-id"],
                 "indexes": [
-                    models.Index(
-                        fields=["status", "review_on"], name="strategy_status_review_idx"
-                    ),
-                    models.Index(
-                        fields=["kind", "started_on"], name="strategy_kind_start_idx"
-                    ),
+                    models.Index(fields=["status", "review_on"], name="strategy_status_review_idx"),
+                    models.Index(fields=["kind", "started_on"], name="strategy_kind_start_idx"),
                 ],
             },
         ),
