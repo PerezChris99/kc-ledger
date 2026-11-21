@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, CalendarDays, ChevronDown, CircleDollarSign, Clock3, Command, LayoutDashboard, LogOut, Menu, Search, Settings2, ShieldAlert, Users, WalletCards, X, ArrowLeftRight } from "lucide-react";
-import { api, money } from "./api";
+import { api, money, isLoopbackOrigin } from "./api";
 import LoginPage from "./features/auth/LoginPage";
 import DashboardPage from "./features/dashboard/DashboardPage";
 import ClientsPage from "./features/clients/ClientsPage";
@@ -69,7 +69,7 @@ export default function App() {
     const now = new Date();
     const [search, setSearch] = useState("");
     const [moreOpen, setMoreOpen] = useState(false);
-    const [online, setOnline] = useState(() => navigator.onLine !== false);
+    const [online, setOnline] = useState(() => navigator.onLine !== false || isLoopbackOrigin());
     const queryClient = useQueryClient();
     const session = useQuery({ queryKey: ["session"], queryFn: () => api("/api/session"), retry: false });
     const preferences = useQuery({ queryKey: ["settings"], queryFn: () => api("/api/settings"), enabled: Boolean(session.data?.authenticated) });
@@ -82,7 +82,19 @@ export default function App() {
             // in-memory financial values as server-authoritative after reconnect.
             void queryClient.invalidateQueries();
         };
-        const disconnected = () => setOnline(false);
+        const disconnected = () => {
+            if (!isLoopbackOrigin()) {
+                setOnline(false);
+                return;
+            }
+            // An OS-level "offline" event describes WAN connectivity, not
+            // whether this computer's local Docker/PostgreSQL app is running.
+            // Probe loopback before hiding a fully functional local ledger.
+            void fetch("/api/health", { cache: "no-store", credentials: "include" })
+                .then(response => setOnline(response.ok))
+                .catch(() => setOnline(false));
+        };
+        if (navigator.onLine === false && isLoopbackOrigin()) disconnected();
         window.addEventListener("online", connected);
         window.addEventListener("offline", disconnected);
         return () => {

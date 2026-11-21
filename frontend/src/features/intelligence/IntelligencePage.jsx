@@ -52,7 +52,7 @@ export default function IntelligencePage() {
     const queryClient = useQueryClient();
     const overview = useQuery({
         queryKey: ["intelligence-overview"],
-        queryFn: () => api("/api/intelligence/overview"), refetchInterval: 60000,
+        queryFn: () => api("/api/intelligence/overview"), refetchInterval: 300000,
         enabled: tab !== "business"
     });
     const types = useQuery({

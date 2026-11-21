@@ -61,3 +61,19 @@ test("installed app shell loads offline without storing private ledger API respo
     await page.reload();
     await expect(page.getByLabel("USERNAME")).toBeVisible();
 });
+
+test("local installed PWA can reach loopback backend when the OS reports no internet", async ({ page, context }) => {
+    await context.addInitScript(() => {
+        Object.defineProperty(Navigator.prototype, "onLine", {
+            configurable: true, get: () => false
+        });
+    });
+    await page.goto("/");
+    const health = await page.evaluate(async () => {
+        const response = await fetch("/api/health", { cache: "no-store" });
+        return response.ok;
+    });
+    expect(health).toBe(true);
+    await expect(page.getByLabel("USERNAME")).toBeVisible();
+    await expect(page.getByText("OFFLINE MODE")).toHaveCount(0);
+});

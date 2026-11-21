@@ -8,13 +8,13 @@ One canonical `VERSION` at repo root determines the Django, Node build and Windo
 
 ## First-time Vercel connection (operator configuration)
 
-1. Create a **managed production PostgreSQL instance** (Neon, Supabase or RDS) with a secure TLS URL and connection pooler. No local or Docker SQLite in serverless.
+1. Create a managed production PostgreSQL instance, preferably Prisma Postgres Free (2 GB; monitor operation caps), or a paid provider with backups. Use a **pooled TLS** `DATABASE_URL` for the Vercel API and a **direct TLS** `DATABASE_DIRECT_URL` for protected migrations and pg_dump. Never use local SQLite in Functions.
 2. In Vercel, create/link project **kc-ledger** to GitHub `PerezChris99/kc-ledger`, root `./`, Vite framework. Git integration can produce PR previews, but **must not auto-assign the production domain before CI/migrations**. Set Vercel production promotion to gated deployment workflow / Deployment Checks; disable direct main auto-aliasing.
 3. Configure protected GitHub production environment variables `LEDGER_BACKUP_AWS_ROLE_ARN`, `LEDGER_BACKUP_AWS_REGION`, `LEDGER_BACKUP_S3_URI` (private S3 prefix), and `LEDGER_BACKUP_KMS_KEY_ID`. Grant the role only write/head permissions to that backup prefix, required KMS rights, and enable GitHub OIDC trust for the protected environment. A runner-local backup alone is **not durable** and deployment will refuse to migrate without offsite verification.
 
-3. Add to Vercel Production scope: `DATABASE_URL` (managed pooled Postgres URL with `sslmode=require`), `DJANGO_SECRET_KEY` (unique 40+ chars), `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS` (explicit production domain), `DJANGO_CSRF_TRUSTED_ORIGINS` (HTTPS domain), `CRON_SECRET` (random 32+ characters), `LEDGER_USERNAME`, `LEDGER_PASSWORD` (owner bootstrap). **Do not commit any credential.** Configure Preview with **separate test database and different credentials**; never point previews at production financial records. `LEDGER_DB_ENGINE=postgres` and `LEDGER_DEPLOYMENT=vercel` are enforced by code.
-4. In GitHub, protected `production` environment: secret `VERCEL_TOKEN`, vars `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, a reviewed exact `VERCEL_CLI_VERSION`. Enable required reviews / restrict deployment to `main`. Set repository var `KC_LEDGER_VERCEL_READY=true` **only after** all deployment secrets and production controls are installed and verified. GitHub pipeline is deliberately inert before that flag.
-5. Confirm project's Vercel Git integration allows PR previews and protected production deployment flow. `vercel.json` routes static Vite output to CDN, the Django WSGI function under `api/index.py`, and an authenticated scheduled cron endpoint. Validate routing and secure session cookies on the actual Vercel URL before broad access.
+4. Add to Vercel Production scope: `DATABASE_URL` (managed pooled Postgres URL with `sslmode=require`), `DATABASE_DIRECT_URL` (managed direct TLS URL for protected migration/backup), `DJANGO_SECRET_KEY` (unique 40+ chars), `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS` (explicit production domain), `DJANGO_CSRF_TRUSTED_ORIGINS` (HTTPS domain), `CRON_SECRET` (random 32+ characters), `LEDGER_USERNAME`, `LEDGER_PASSWORD` (owner bootstrap). **Do not commit any credential.** Configure Preview with **separate test database and different credentials**; never point previews at production financial records. `LEDGER_DB_ENGINE=postgres` and `LEDGER_DEPLOYMENT=vercel` are enforced by code.
+5. In GitHub, protected `production` environment: secret `VERCEL_TOKEN`, vars `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, a reviewed exact `VERCEL_CLI_VERSION`. Enable required reviews / restrict deployment to `main`. Set repository var `KC_LEDGER_VERCEL_READY=true` **only after** all deployment secrets and production controls are installed and verified. GitHub pipeline is deliberately inert before that flag.
+6. Confirm project's Vercel Git integration allows PR previews and protected production deployment flow. `vercel.json` routes static Vite output to CDN, the Django WSGI function under `api/index.py`, and an authenticated scheduled cron endpoint. Validate routing and secure session cookies on the actual Vercel URL before broad access.
 
 ## Web pipeline
 
@@ -67,3 +67,9 @@ To roll back the web deployment, stage/promote the previous compatible Vercel bu
 - Web/desktop authentication and session cookies against actual deployed domains; update rollout at 0%, partial and 100%; full end-to-end financial reconciliation.
 
 **No real Vercel deployment, release or code signing occurs until those external dependencies are configured.** 
+
+## Installable browser distribution
+
+`npm run build` generates and verifies the PWA manifest, 192/512/maskable PNG assets, service worker and cached static shell. The staged Vercel smoke test now checks the actual delivered PWA assets in addition to Django API health and exact Git SHA before promotion. Ledger/API responses are never cached offline; pending form edits must be saved before accepting an SW update.
+
+For cloud vs loopback installation, full local operations and database costs see [PWA operations](16-pwa.md) and [Vercel + Prisma runbook](31-pwa-vercel-prisma.md). Provisioning/secrets remain external, and commercial Vercel use requires a plan permitting business applications.

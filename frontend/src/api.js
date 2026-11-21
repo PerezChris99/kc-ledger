@@ -1,3 +1,10 @@
+// Loopback is a trustworthy secure context even without internet. The
+// installed PWA must still be able to talk to a locally running Django API.
+export function isLoopbackOrigin() {
+    return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(
+        window.location.hostname.toLowerCase()
+    );
+}
 export class ApiError extends Error {
     status;
     constructor(message, status) { super(message); this.status = status; }
@@ -17,7 +24,7 @@ async function csrf() {
     return body.csrfToken;
 }
 export async function api(path, init = {}) {
-    if (navigator.onLine === false)
+    if (navigator.onLine === false && !isLoopbackOrigin())
         throw new ApiError("Offline: financial records and updates require a live secure connection.", 0);
     const method = (init.method ?? "GET").toUpperCase();
     const headers = new Headers(init.headers);

@@ -88,7 +88,7 @@ export default function BusinessCommandPage() {
     const query = useQuery({
         queryKey: ["business-intelligence"],
         queryFn: () => api("/api/intelligence/business/overview"),
-        refetchInterval: 60000
+        refetchInterval: 300000
     });
     const data = query.data;
     const pitchClients = (data?.client_contribution ?? []).filter(x => !x.is_archived);

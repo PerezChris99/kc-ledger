@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, BellRing } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../../api";
+import { api, isLoopbackOrigin } from "../../api";
 import { playSound } from "../../sounds";
 function soundFor(item) {
     if (item.kind.includes("broken") || item.kind.includes("overdue"))
@@ -21,6 +21,9 @@ export default function NotificationWatcher() {
         let alive = true;
         let cursor = new Date().toISOString();
         const poll = async () => {
+            // Prevent continuous hidden-tab and offline network/database reads.
+            if (document.visibilityState !== "visible" || (navigator.onLine === false && !isLoopbackOrigin()))
+                return;
             try {
                 const result = await api(`/api/notifications?since=${encodeURIComponent(cursor)}`);
                 if (!alive)
@@ -44,8 +47,16 @@ export default function NotificationWatcher() {
                 // Polling failures are non-fatal; the dashboard remains usable.
             }
         };
-        const timer = window.setInterval(() => { void poll(); }, 30000);
-        return () => { alive = false; window.clearInterval(timer); };
+        const timer = window.setInterval(() => { void poll(); }, 120000);
+        const resume = () => { if (document.visibilityState === "visible") void poll(); };
+        document.addEventListener("visibilitychange", resume);
+        window.addEventListener("online", resume);
+        return () => {
+            alive = false;
+            window.clearInterval(timer);
+            document.removeEventListener("visibilitychange", resume);
+            window.removeEventListener("online", resume);
+        };
     }, [preferences.data]);
     if (!notices.length)
         return null;
