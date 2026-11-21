@@ -29,8 +29,11 @@ async function recordSignal(page, code) {
 
 test("intelligence charts, factual history matching, owner review and local advice", async ({ page }) => {
     await login(page);
-    await newClient(page, "Historical Scope and Payment");
-    await newClient(page, "Current Scope and Payment");
+    const unique = Date.now().toString(36);
+    const historical = `Historical Scope and Payment ${unique}`;
+    const current = `Current Scope and Payment ${unique}`;
+    await newClient(page, historical);
+    await newClient(page, current);
 
     const nav = page.getByRole("navigation", { name: "Main navigation" });
     await nav.getByRole("button", { name: "Intelligence", exact: true }).click();
@@ -41,17 +44,17 @@ test("intelligence charts, factual history matching, owner review and local advi
     await page.getByRole("tab", { name: "Client analysis" }).click();
     const selector = page.getByLabel("Select a client for intelligence analysis");
     await selector.selectOption(
-        await selector.locator("option").filter({ hasText: "Historical Scope and Payment" }).getAttribute("value")
+        await selector.locator("option").filter({ hasText: historical }).last().getAttribute("value")
     );
     await recordSignal(page, "scope_creep");
     await recordSignal(page, "chargeback");
 
     await selector.selectOption(
-        await selector.locator("option").filter({ hasText: "Current Scope and Payment" }).getAttribute("value")
+        await selector.locator("option").filter({ hasText: current }).last().getAttribute("value")
     );
     await recordSignal(page, "scope_creep");
     await recordSignal(page, "chargeback");
-    await expect(page.getByText("Historical Scope and Payment", { exact: true }).last()).toBeVisible();
+    await expect(page.getByText(historical, { exact: true }).last()).toBeVisible();
     await expect(page.getByText(/Common observed behaviours:/)).toContainText("Chargeback");
 
     await page.getByRole("button", { name: "Generate advisory report" }).click();

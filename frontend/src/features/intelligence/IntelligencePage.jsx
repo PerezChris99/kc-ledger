@@ -72,7 +72,7 @@ export default function IntelligencePage() {
          filter === "limited" && row.confidence === "insufficient") &&
         row.name.toLowerCase().includes(search.toLowerCase())
     ));
-    async function refresh() {
+    async function refresh(note = "Analysis refreshed from current ledger records.") {
         setError("");
         setBusy(true);
         try {
@@ -82,7 +82,7 @@ export default function IntelligencePage() {
                 queryClient.invalidateQueries({ queryKey: ["clients"] }),
                 queryClient.invalidateQueries({ queryKey: ["avoid"] })
             ]);
-            setMessage("Analysis refreshed from current ledger records.");
+            setMessage(note);
         } catch {
             setError("Unable to refresh the intelligence workspace.");
         } finally { setBusy(false); }
@@ -103,8 +103,7 @@ export default function IntelligencePage() {
                 method: "POST", body: JSON.stringify({ code: signal, detail: evidence })
             });
             setEvidence("");
-            setMessage("Documented signal added. Scores and historical matches recalculated.");
-            await refresh();
+            await refresh("Documented signal added. Scores and historical matches recalculated.");
         } catch (err) {
             setError(err instanceof Error ? err.message : "Unable to record evidence.");
         } finally { setBusy(false); }
@@ -115,7 +114,7 @@ export default function IntelligencePage() {
             await api(`/api/intelligence/alerts/${id}/review`, {
                 method: "POST", body: JSON.stringify({ status })
             });
-            await refresh();
+            await refresh("Alert review saved.");
         } catch (err) {
             setError(err instanceof Error ? err.message : "Unable to review the alert.");
         } finally { setBusy(false); }
