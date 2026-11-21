@@ -498,7 +498,7 @@ def test_archived_clients_still_account_for_historical_cash_not_current_pitches(
 
 @pytest.mark.django_db
 def test_cash_goals_and_decision_baselines_fail_closed_after_currency_change():
-    from ledger.services.business_intelligence import decision_review
+    from ledger.services.business_intelligence import decision_review, objective_progress
 
     goal = BusinessObjective.objects.create(
         name="Cash safety",
