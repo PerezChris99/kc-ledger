@@ -39,6 +39,7 @@ def daily(request):
             jobs.detect_ghosting()
             jobs.draft_recurring_invoices()
             jobs.refresh_fx_rates()
+            jobs.update_client_intelligence()
         return JsonResponse({"status": "ok"})
     except Exception:
         logger.exception("Cron job failure")

@@ -242,6 +242,13 @@ def refresh_fx_rates():
         logger.exception("FX refresh failed; existing stored rates were retained.")
 
 
+def update_client_intelligence():
+    """Rebuild evidence snapshots without invoking any external AI provider."""
+    from ledger.services.intelligence import refresh_intelligence
+
+    refresh_intelligence()
+
+
 def start_scheduler():
     global _scheduler
     if _scheduler and _scheduler.running:
@@ -281,6 +288,15 @@ def start_scheduler():
         hour=6,
         minute=0,
         id="recurring-invoices",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        update_client_intelligence,
+        "interval",
+        minutes=20,
+        id="client-intelligence",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

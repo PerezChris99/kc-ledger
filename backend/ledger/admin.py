@@ -2,6 +2,10 @@ from django.contrib import admin
 
 from .models import (
     Client,
+    ClientAdvisoryReport,
+    ClientIntelligenceObservation,
+    ClientIntelligenceProfile,
+    ClientPatternAlert,
     Engagement,
     Event,
     Expense,
@@ -80,3 +84,45 @@ class EventAdmin(admin.ModelAdmin):
 
 for model in (PlanMeta, PaymentAllocation, SignalType, TimeEntry, Target, FxRate, Meta):
     admin.site.register(model)
+
+
+class ReadOnlyIntelligenceAdmin(admin.ModelAdmin):
+    """Intelligence is derived by the engine; the owner reviews alerts in the app."""
+
+    readonly_fields = ()
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ClientIntelligenceProfile)
+class ClientIntelligenceProfileAdmin(ReadOnlyIntelligenceAdmin):
+    list_display = ("client", "sample_size", "score_snapshot", "assessed_at")
+    list_select_related = ("client",)
+
+
+@admin.register(ClientPatternAlert)
+class ClientPatternAlertAdmin(ReadOnlyIntelligenceAdmin):
+    list_display = ("client", "reference_client", "similarity", "status", "updated_at")
+    list_filter = ("status",)
+    list_select_related = ("client", "reference_client")
+
+
+@admin.register(ClientIntelligenceObservation)
+class ClientIntelligenceObservationAdmin(ReadOnlyIntelligenceAdmin):
+    list_display = ("client", "observed_on", "score", "risk_index", "evidence_count")
+    list_filter = ("observed_on",)
+    list_select_related = ("client",)
+
+
+@admin.register(ClientAdvisoryReport)
+class ClientAdvisoryReportAdmin(ReadOnlyIntelligenceAdmin):
+    list_display = ("client", "provider", "model_name", "created_at")
+    list_filter = ("provider",)
+    list_select_related = ("client",)

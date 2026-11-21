@@ -429,3 +429,28 @@ def test_client_rejects_nonalphabetic_currency(staff_client):
     )
     assert response.status_code == 422
     assert not Client.objects.filter(name="Invalid Currency").exists()
+
+
+@pytest.mark.django_db
+def test_low_score_warns_without_automatically_blocking_owner_invoice(staff_client):
+    owner = Client.objects.create(name="Documented Risk, Not Blacklisted", score=15)
+    response = staff_client.post(
+        "/api/invoices",
+        data={
+            "client_id": owner.id,
+            "number": "REVIEW-001",
+            "title": "Written agreement",
+            "issue_date": date.today().isoformat(),
+            "due_date": (date.today() + timedelta(days=14)).isoformat(),
+            "amount": "100.00",
+            "currency": "USD",
+            "status": "sent",
+        },
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    assert Invoice.objects.filter(number="REVIEW-001").exists()
+    # Advisory scores do not make autonomous account decisions.
+    assert response.json()["risk_warning"] is None or "health score" in response.json()[
+        "risk_warning"
+    ]

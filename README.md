@@ -4,6 +4,17 @@
 
 **Primary database:** local PostgreSQL 15+ or managed PostgreSQL on Vercel; **SQLite WAL:** controlled desktop-only fallback, never silently synchronized. The frontend uses React/JavaScript/JSX and Vite; backend uses Django 5.2/Ninja, APScheduler and ReportLab. The native Windows application hosts Django locally through Waitress + WebView2.
 
+## Client intelligence — the primary decision-support engine
+
+KC Ledger now combines its deterministic eight-factor client scoring with structured business-behaviour evidence, historical pattern matching, reviewable alerts and real longitudinal analytics. The primary engine runs entirely on your own PostgreSQL/SQLite ledger without model keys or network access.
+
+The dedicated **Intelligence** navigation page includes health and risk distributions, warning frequencies, a health/risk scatter, recorded behaviour heatmap, 90-day score/risk trends, per-client radar and evidence timelines, actionable local recommendations, and reviewable cross-client pattern warnings. At least **two different shared adverse behaviours** and sufficient weighted overlap are required before creating a pattern alert. Personal identifiers and protected characteristics are never features of the comparison. Scores do not automatically blacklist clients.
+
+**Secondary model advice:** owner opt-in Gemini (eligible free API tier) or xAI Grok (metered, disabled by default). Only de-identified coded indicators are shared per request, never client names, personal contacts or free-text notes. Models cannot change your ledger. Google ADK is intentionally not required for these restricted read-only advisories.
+
+- [Primary intelligence, matching algorithm, API and model privacy controls](docs/28-client-intelligence.md)
+- [Deep audit findings and release gates](docs/29-audit-findings.md)
+
 ## Architecture
 
 ```mermaid

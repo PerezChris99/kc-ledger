@@ -8,6 +8,7 @@ import ClientsPage from "./features/clients/ClientsPage";
 import InvoicesPage from "./features/invoices/InvoicesPage";
 import PlansPage from "./features/plans/PlansPage";
 import InsightsPage from "./features/insights/InsightsPage";
+import IntelligencePage from "./features/intelligence/IntelligencePage";
 import AvoidPage from "./features/avoid/AvoidPage";
 import HistoryPage from "./features/history/HistoryPage";
 import SettingsPage from "./features/settings/SettingsPage";
@@ -25,6 +26,7 @@ const nav = [
     { id: "invoices", label: "Invoices", icon: WalletCards },
     { id: "plans", label: "Instalment plans", icon: CalendarDays },
     { id: "insights", label: "Insights", icon: Activity },
+    { id: "intelligence", label: "Intelligence", icon: ShieldAlert },
     { id: "avoid", label: "Avoid", icon: ShieldAlert },
     { id: "history", label: "History", icon: Activity },
     { id: "settings", label: "Settings", icon: Settings2 },
@@ -85,7 +87,7 @@ export default function App() {
         return <LoginPage unavailable={Boolean(session.error)} onSuccess={() => { void queryClient.invalidateQueries({ queryKey: ["session"] }); }}/>;
     const page = active === "clients" ? <ClientsPage initialQuery={search}/> :
         active === "invoices" ? <InvoicesPage /> : active === "plans" ? <PlansPage /> :
-            active === "insights" ? <InsightsPage /> : active === "avoid" ? <AvoidPage /> :
+            active === "insights" ? <InsightsPage /> : active === "intelligence" ? <IntelligencePage /> : active === "avoid" ? <AvoidPage /> :
                 active === "history" ? <HistoryPage /> : active === "settings" ? <SettingsPage /> : <DashboardPage />;
     const heading = nav.find(item => item.id === active)?.label ?? "Dashboard";
     return <div className="app-frame"><NotificationWatcher />
