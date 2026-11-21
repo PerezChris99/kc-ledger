@@ -1,46 +1,64 @@
 # KC Ledger
 
-KC Ledger is a private financial operations system built for one owner running a service business. It follows the work from the first proposal through delivery and collection, bringing the client relationship, hours worked, expenses, and payments into one business record.
+KC Ledger is a private financial operations and decision-support system for an owner-run service business. It connects the commercial history of a client relationship—what was proposed, delivered, billed, and paid—with the hours and expenses behind the work.
 
-## The problem it solves
+A large contract can keep a business busy for weeks while contributing little cash. KC Ledger gives the owner enough detail to see why. An unpaid instalment calls for a collections conversation. Repeated revisions that consume the project budget call for a different scope or price on the next proposal.
 
-An invoice shows what a client agreed to pay. A bank statement shows what arrived. Neither tells the owner how much work went into the job, whether a late payment is unusual for that client, or how much cash the project has contributed so far. When those answers live in spreadsheets, messages, and memory, even deciding whom to follow up with can mean reconstructing months of work.
+## The economics of a single engagement
 
-Consider an illustrative project billed at **UGX 2,000,000**. The client has paid **UGX 800,000**, and the owner has recorded **UGX 200,000** in project expenses. KC Ledger can show **UGX 1,200,000 still owed** alongside **UGX 600,000 in cash contribution to date**. The payment schedule tells the owner when the balance is due. Logged hours add the context needed to judge whether similar work is worth taking on again. Formal profit reporting requires a fuller accounting of the business’s costs and obligations.
+Suppose a project was invoiced at **UGX 2,000,000**. The client has paid **UGX 800,000**, the owner has recorded **UGX 200,000** in direct expenses, and the work has taken **20 hours**. Three figures describe three different aspects of that engagement.
 
-## From a proposal to a business decision
+| Business question | Result to date | How to read it |
+| --- | ---: | --- |
+| How much does the client still owe? | UGX 1,200,000 | The invoice balance. Its due dates determine how much is overdue. |
+| How much cash has the work contributed? | UGX 600,000 | Receipts less recorded direct expenses. Shared overhead and the owner's labour still matter when assessing profit. |
+| What has each recorded hour returned? | UGX 30,000/hour | Cash contribution divided by logged hours. A later payment or another day of work changes the figure. |
 
-| Part of the business | What KC Ledger brings together |
-| --- | --- |
-| Sales | Lead sources, proposal stages, quoted amounts, next actions, and won or lost outcomes. A quote, an issued invoice, and a collected payment each have their own place in the record. |
-| Client work | Engagements, time entries, and expenses connect the price of a job to the effort and cost of delivering it. |
-| Collections | Invoices, instalment schedules, partial payments, due dates, and write-offs explain each outstanding balance. Statements give the owner a record to use in a payment conversation. |
-| Business planning | Cash trends, spending categories, overdue amounts, and dependence on individual clients help the owner decide where to focus. Goals and dated strategy reviews preserve what the owner tried and what happened afterward. |
+The figures above are illustrative. The diagram shows which records support each calculation.
 
 ```mermaid
 flowchart TD
-    Work[Client engagement] --> Bill[Invoice and payment schedule]
-    Work --> Cost[Recorded expenses]
-    Work --> Time[Logged hours]
-    Bill --> Paid[Payments received]
-    Bill --> Due[Balance still due]
-    Paid --> Cash[Cash contribution to date]
-    Cost --> Cash
-    Cash --> Review[Project review]
-    Time --> Review
-    Due --> Follow[Collection follow-up]
+    Invoice[Invoice amount] --> Balance[Outstanding balance]
+    Receipts[Recorded payments] -->|Reduce| Balance
+    Receipts --> Contribution[Direct cash contribution]
+    Expenses[Project expenses] -->|Reduce| Contribution
+    Contribution --> Rate[Effective hourly return]
+    Hours[Logged hours] --> Rate
+    Balance --> Collection[Collection priorities]
+    Schedule[Due dates] --> Collection
 ```
 
-## How the intelligence works
+## What the owner can see
 
-**Client intelligence** uses eight scoring factors, including payment speed, outstanding debt, repeat business, and instalment history. An owner reviewing a late payer can examine the underlying events and see whether the delay is isolated or part of a recurring pattern. Cross-client alerts highlight shared, documented behaviours for human review.
+**Sales and delivery.** Opportunities retain their lead source, quoted value, next action, and eventual win or loss. Engagements carry the hours, expenses, and invoices for the work itself. This separation lets the owner review how proposals performed while counting cash only when a payment is recorded.
 
-**Business Command** looks across the ledger. It can surface rising costs, a growing overdue balance, or a concentration of receipts from one client. The owner can explore a cash scenario, choose a strategy, and review it against a recorded baseline. A completed review retains the figures available on its review date, so later payments cannot rewrite the original conclusion.
+**Collections and client relationships.** Instalment schedules, reminders, and PDF statements support follow-up. An eight-factor client score draws on payment speed, overdue exposure, repeat work, and other recorded signals. The underlying history helps the owner distinguish a first missed deadline from a pattern worth considering before extending payment terms again.
 
-The core analysis uses explicit rules and the owner’s recorded evidence. Optional external AI advice uses de-identified indicators with the owner’s consent. Decisions about pricing, payment terms, and future work stay with the owner.
+**The business as a whole.** Business Command brings receipts, costs, overdue balances, and payer concentration into one view. The owner can see when a strong month depended on one client, examine which expense category increased, or explore how a change in collections would affect cash. Scenarios describe the consequences of an assumption. Sales outcomes come from recorded wins and losses.
 
-## Financial history and privacy
+## How a strategy is reviewed
 
-Recording a payment updates the invoice, allocates money to scheduled instalments where applicable, and records the audit event in one transaction. Timestamped database snapshots support recovery to an earlier saved state. Access to the financial workspace is restricted to the owner, and the browser keeps private ledger responses out of its offline cache.
+An owner who wants to reduce overdue balances can record the current amount, choose a change in payment terms, and set a review date. The review preserves the evidence available on that date. A payment arriving the following week updates the live ledger while the earlier assessment keeps its original figures.
+
+```mermaid
+flowchart TD
+    Goal[Choose a measurable goal] --> Baseline[Capture the starting value]
+    Baseline --> Action[Record the strategy and review date]
+    Action --> Review{Comparable evidence at review?}
+    Review -->|Yes| Result[Record improvement, decline, or no change]
+    Review -->|No| Gap[Record the evidence gap]
+    Result --> History[Preserve the dated review]
+    Gap --> History
+```
+
+The core analysis runs on explicit rules and ledger evidence. Optional AI advice uses de-identified indicators with the owner's consent. Pricing, client terms, and financial decisions remain with the owner.
+
+## Integrity and privacy
+
+A payment, its instalment allocations, the invoice update, and the audit event are recorded together in one database transaction. Paid amounts are allocated to the earliest unpaid instalments first. Archiving a client preserves its historical contribution, so past business performance remains visible as the active client list changes.
+
+Access to the workspace is restricted to the owner. Private financial responses stay out of the browser's offline cache. Timestamped database snapshots support recovery to an earlier saved state.
+
+[Client scoring and evidence](docs/architecture/client-intelligence.md) · [Business intelligence and financial measures](docs/architecture/business-intelligence.md)
 
 Copyright © 2026 KC. All rights reserved. [Proprietary license](LICENSE)
