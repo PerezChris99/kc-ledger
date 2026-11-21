@@ -1,6 +1,9 @@
 from django.contrib import admin
 
 from .models import (
+    BusinessAdvisoryReport,
+    BusinessObjective,
+    BusinessStrategyDecision,
     Client,
     ClientAdvisoryReport,
     ClientIntelligenceObservation,
@@ -126,3 +129,23 @@ class ClientAdvisoryReportAdmin(ReadOnlyIntelligenceAdmin):
     list_display = ("client", "provider", "model_name", "created_at")
     list_filter = ("provider",)
     list_select_related = ("client",)
+
+
+@admin.register(BusinessObjective)
+class BusinessObjectiveAdmin(admin.ModelAdmin):
+    list_display = ("name", "metric", "target", "due_date", "status")
+    list_filter = ("metric", "status", "due_date")
+    search_fields = ("name",)
+
+
+@admin.register(BusinessStrategyDecision)
+class BusinessStrategyDecisionAdmin(admin.ModelAdmin):
+    list_display = ("title", "kind", "metric", "status", "review_on")
+    list_filter = ("kind", "status", "review_on")
+    search_fields = ("title", "rationale")
+
+
+@admin.register(BusinessAdvisoryReport)
+class BusinessAdvisoryReportAdmin(ReadOnlyIntelligenceAdmin):
+    list_display = ("provider", "model_name", "created_at")
+    list_filter = ("provider",)

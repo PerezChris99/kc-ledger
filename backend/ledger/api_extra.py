@@ -796,9 +796,13 @@ def list_notifications(request, since: datetime | None = None, limit: int = 30):
         "plan_verdict_at_risk",
         "plan_verdict_broken",
     ]
-    rows = Event.objects.filter(kind__in=kinds, occurred_at__gt=since).order_by(
-        "occurred_at", "id"
-    )[:limit]
+    from django.db.models import Q
+
+    rows = (
+        Event.objects.filter(occurred_at__gt=since)
+        .filter(Q(kind__in=kinds) | Q(kind__startswith="business_alert_"))
+        .order_by("occurred_at", "id")[:limit]
+    )
     return {
         "items": [
             {

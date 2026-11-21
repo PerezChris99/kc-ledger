@@ -4,6 +4,14 @@
 
 **Primary database:** local PostgreSQL 15+ or managed PostgreSQL on Vercel; **SQLite WAL:** controlled desktop-only fallback, never silently synchronized. The frontend uses React/JavaScript/JSX and Vite; backend uses Django 5.2/Ninja, APScheduler and ReportLab. The native Windows application hosts Django locally through Waitress + WebView2.
 
+## Business-wide strategy and financial intelligence
+
+The intelligence engine now begins with a **Business command** workspace: recorded cash movement, costs by category, project and client cash contribution, overdue exposure, multi-period trends and anomalies, owner-defined goals, tracked strategy experiments, an illustrative cash sensitivity lab and an evidence-based client pitching guide. The local deterministic advisor challenges high-risk assumptions and previous underperforming decisions before optional Gemini/Grok second opinions.
+
+**Accounting limitation:** collected cash minus recorded expenses is **not** audited profit, bank balance or a full income statement. Models cannot approve payments, invent historical baselines, change client status or take business actions.
+
+- [Business intelligence architecture, goal measurement, strategy evaluation and limits](docs/30-business-intelligence.md)
+
 ## Client intelligence — the primary decision-support engine
 
 KC Ledger now combines its deterministic eight-factor client scoring with structured business-behaviour evidence, historical pattern matching, reviewable alerts and real longitudinal analytics. The primary engine runs entirely on your own PostgreSQL/SQLite ledger without model keys or network access.
