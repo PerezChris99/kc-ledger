@@ -475,3 +475,24 @@ def test_strategy_ranking_shows_reviewed_unfavorable_outcome_without_false_causa
     cost = next(row for row in recommendations if row["id"] == "cost_review")
     assert cost["past_unfavorable_observations"] == 1
     assert "caused" in cost["limitations"]
+
+
+@pytest.mark.django_db
+def test_archived_clients_still_account_for_historical_cash_not_current_pitches(paid_client):
+    invoiced = invoice(
+        paid_client, 120, timezone.localdate() + timedelta(days=5),
+        number="ARCHIVED-CASH-1"
+    )
+    Payment.objects.create(
+        client=paid_client, invoice=invoiced,
+        amount=Decimal("120.00"), paid_on=timezone.localdate()
+    )
+    paid_client.delete()
+    report = build_business_snapshot(base="USD")
+    assert report["metrics"]["collected"] == "120.00"
+    assert report["metrics"]["active_clients"] == 0
+    assert report["metrics"]["client_count"] == 0
+    row = next(x for x in report["client_contribution"] if x["id"] == paid_client.id)
+    assert row["is_archived"] is True
+    assert row["receipts"] == "120.00"
+    assert report["metrics"]["top_client_share_pct"] == 100.0

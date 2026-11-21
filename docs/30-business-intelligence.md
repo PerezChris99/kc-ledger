@@ -25,6 +25,8 @@ The primary equation is:
 
 This is a historical recorded **cash performance proxy**, NOT net accounting profit, bank cash balance, tax profit, true operating cash flow or an audited income statement. An invoice does not become spendable cash until a payment is recorded. The ledger does not yet verify all owner salary, payroll, tax, depreciation, funding, capital expenditures, supplier obligations, refunds, capital, invoiced accrual recognition or completeness of expenses. Categorizing costs and recording all supplier/owner transactions is essential.
 
+Historical cash receipts and attributable expenses remain included even when a client or engagement has been soft-archived. Archived clients are distinguished in economic history, excluded from active-client counts and excluded from the current pitch selector. This avoids creating a fictitious improvement in revenue or client concentration simply by archiving an account.
+
 The engine *never* silently counts missing FX conversion as zero revenue; it identifies the missing currency. Financial goals become non-evaluable until conversion is complete. FX values currently use stored rates rather than historical per-transaction rates and should be treated accordingly. Project and client direct contribution excludes shared/unallocated cost and unrecorded labor, so it is NOT fully loaded profitability. Totals include direct client costs **and all business-wide unassigned expenses**. Any unrecorded item remains unknown—not invented.
 
 ### Financial views

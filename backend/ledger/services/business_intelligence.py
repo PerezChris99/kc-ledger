@@ -267,8 +267,11 @@ def build_business_snapshot(as_of=None, base=None):
                     overdue += balance
                     client_overdue[invoice.client_id] += balance
 
-    clients = list(Client.objects.values("id", "name", "status", "score"))
-    active_clients = sum(row["status"] == Client.Status.ACTIVE for row in clients)
+    clients = list(Client.all_objects.values("id", "name", "status", "score", "deleted_at"))
+    active_clients = sum(
+        row["status"] == Client.Status.ACTIVE and row["deleted_at"] is None
+        for row in clients
+    )
     total_hours = sum(client_hours.values(), ZERO)
     monthly_rows = [
         {
@@ -295,6 +298,7 @@ def build_business_snapshot(as_of=None, base=None):
                 "id": cid,
                 "client": item["name"],
                 "status": item["status"],
+                "is_archived": item["deleted_at"] is not None,
                 "score": item["score"],
                 "receipts": amount(rec),
                 "direct_expenses": amount(costs),
@@ -309,7 +313,7 @@ def build_business_snapshot(as_of=None, base=None):
         Decimal(contributions[0]["receipts"]) / collected if contributions and collected else ZERO
     )
     project_rows = []
-    for eng in Engagement.objects.select_related("client").all():
+    for eng in Engagement.all_objects.select_related("client").all():
         hours = engagement_hours[eng.id]
         received = revenue_by_engagement[eng.id]
         direct_costs = expenses_by_engagement[eng.id]
@@ -475,7 +479,7 @@ def build_business_snapshot(as_of=None, base=None):
             "written_off": amount(written_off),
             "unpaid_disputed": amount(unpaid_disputed),
             "active_clients": active_clients,
-            "client_count": len(clients),
+            "client_count": sum(row["deleted_at"] is None for row in clients),
             "receipt_count": receipts_count,
             "expense_count": expenses_count,
             "logged_hours": amount(total_hours),

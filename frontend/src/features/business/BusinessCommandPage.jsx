@@ -91,7 +91,8 @@ export default function BusinessCommandPage() {
         refetchInterval: 60000
     });
     const data = query.data;
-    const selectedClient = clientId || String(data?.client_contribution?.[0]?.id ?? "");
+    const pitchClients = (data?.client_contribution ?? []).filter(x => !x.is_archived);
+    const selectedClient = clientId || String(pitchClients[0]?.id ?? "");
     const pitch = useQuery({
         queryKey: ["business-pitch", selectedClient],
         queryFn: () => api("/api/intelligence/business/pitch/" + selectedClient),
@@ -486,7 +487,7 @@ export default function BusinessCommandPage() {
           <p className="settings-note">Uses your recorded delivery, outstanding balance and contracting history. Does not infer clients’ personalities or invent market research.</p>
           <label className="command-select-label">SELECT CLIENT<select value={selectedClient}
             onChange={e => setClientId(e.target.value)}>
-              {data.client_contribution.map(x => <option key={x.id} value={x.id}>{x.client}</option>)}
+              {pitchClients.map(x => <option key={x.id} value={x.id}>{x.client}</option>)}
             </select></label>
           {pitch.isLoading ? <div className="loading-panel">Checking recorded engagements…</div>
             : pitch.error ? <p className="error-panel">Could not load this pitch guide.</p>
