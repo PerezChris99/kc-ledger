@@ -564,14 +564,17 @@ def test_strategy_review_is_frozen_and_no_change_is_not_a_success(owner, paid_cl
     assert frozen[2] == Decimal(0)
     assert decision.review_favorable is None
     # This new payment changes live totals, but may not rewrite the review.
+    from ledger.services.business_intelligence import _shift_month
+
+    paid_on = _shift_month(timezone.localdate(), -1) + timedelta(days=12)
     recent = invoice(
         paid_client,
         130,
-        timezone.localdate() + timedelta(days=7),
+        paid_on + timedelta(days=3),
         number="REVIEW-FROZEN-INVOICE",
     )
     Payment.objects.create(
-        client=paid_client, invoice=recent, amount=Decimal(130), paid_on=timezone.localdate()
+        client=paid_client, invoice=recent, amount=Decimal(130), paid_on=paid_on
     )
     live = build_business_snapshot(base="USD")
     shown = decision_review(decision, live)

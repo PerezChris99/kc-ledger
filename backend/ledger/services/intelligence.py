@@ -371,10 +371,11 @@ def refresh_intelligence():
         ClientIntelligenceObservation.objects.bulk_update(
             changed_observations, ["score", "risk_index", "evidence_count"], batch_size=200
         )
-    existing_alerts = {
-        (row.client_id, row.reference_client_id): row
-        for row in ClientPatternAlert.objects.filter(client_id__in=ids)
-    }
+    existing_alerts = {}
+    alerts_by_client = defaultdict(dict)
+    for alert in ClientPatternAlert.objects.filter(client_id__in=ids):
+        existing_alerts[(alert.client_id, alert.reference_client_id)] = alert
+        alerts_by_client[alert.client_id][alert.reference_client_id] = alert
 
     # Index negative evidence codes instead of comparing every possible
     # pair. Bound the candidate set for an owner-operated ledger so a large
@@ -392,6 +393,12 @@ def refresh_intelligence():
         for code in current_codes:
             for previous_id in previous_by_code[code][-MAX_REFERENCES_PER_SIGNAL:]:
                 candidates[previous_id] += 1
+        # Preserve previously seen historical references even after a
+        # bounded index rotates. Otherwise a previously recorded risk
+        # would falsely "resolve" merely due to newer clients being added.
+        for previous_id in alerts_by_client[current.id]:
+            if previous_id in client_by_id:
+                candidates[previous_id] = max(2, candidates[previous_id])
         # Retired clients can still inform historical review. Only current
         # live clients may receive a new risk alert.
         matches = []
@@ -449,15 +456,15 @@ def refresh_intelligence():
                     client=current, reference_client=previous, defaults=values
                 )
                 existing_alerts[(current.id, previous.id)] = entry
+                alerts_by_client[current.id][previous.id] = entry
             elif any(getattr(existing, key) != value for key, value in values.items()):
                 for key, value in values.items():
                     setattr(existing, key, value)
                 existing.save(update_fields=[*values, "updated_at"])
         stale_ids = [
             alert.id
-            for (client_id, reference_id), alert in existing_alerts.items()
-            if client_id == current.id
-            and reference_id not in active_previous_ids
+            for reference_id, alert in alerts_by_client[current.id].items()
+            if reference_id not in active_previous_ids
             and alert.status != ClientPatternAlert.Status.RESOLVED
         ]
         if stale_ids:

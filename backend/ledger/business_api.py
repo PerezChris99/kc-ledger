@@ -439,7 +439,6 @@ def review_strategy_decision(request, decision_id: int, payload: StrategyReview)
     try:
         row = (
             BusinessStrategyDecision.objects.select_for_update()
-            .select_related("client")
             .get(pk=decision_id)
         )
     except BusinessStrategyDecision.DoesNotExist as exc:
