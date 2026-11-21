@@ -594,3 +594,27 @@ a:hover { color: var(--kc-navy); }
   .command-heading { flex-direction: column; }
   .command-forecast { grid-template-columns: minmax(0,1fr); }
 }
+
+/* Installation, update consent and private-data-safe offline state */
+.pwa-install-anchor { position: relative; }
+.pwa-install-instructions { position: absolute; top: calc(100% + 10px); right: 0; z-index: 100; display: flex; gap: 9px; padding: 16px 42px 14px 14px; background: #fff; border: 1px solid var(--border); box-shadow: 0 12px 30px rgba(11,27,61,.14); color: #0B1B3D; width: min(310px, calc(100vw - 30px)); font-size: 12px; line-height: 1.55; }
+.pwa-install-instructions p { margin: 0; }
+.pwa-close-icon { background: transparent; border: 0; color: inherit; padding: 5px; cursor: pointer; }
+.pwa-install-instructions .pwa-close-icon { position: absolute; right: 8px; top: 8px; }
+.pwa-update-notice { position: fixed; bottom: max(16px, env(safe-area-inset-bottom)); right: 16px; z-index: 1000; display: flex; align-items: start; gap: 16px; max-width: min(470px, calc(100vw - 32px)); background: #0B1B3D; border: 1px solid #304060; box-shadow: 0 12px 28px rgba(11,27,61,.25); color: white; padding: 15px; }
+.pwa-update-notice strong { font-size: 13px; }
+.pwa-update-notice p { color: #D5DDEA; font-size: 12px; line-height: 1.5; margin: 6px 0 0; }
+.pwa-update-notice .small-button { flex-shrink: 0; }
+.pwa-offline-screen { min-height: 100dvh; background: #F5F5F7; display: grid; place-items: center; padding: 24px; }
+.pwa-offline-tile { background: white; border: 1px solid #DAE0E9; width: min(540px, 100%); padding: clamp(28px, 5vw, 48px); color: #0B1B3D; }
+.pwa-offline-tile .wordmark-symbol { display: inline-flex; font-size: 29px; margin-bottom: 25px; }
+.pwa-offline-tile h1 { font-size: clamp(20px, 3vw, 28px); font-weight: 650; letter-spacing: -.025em; line-height: 1.25; }
+.pwa-offline-tile > p { color: #445168; line-height: 1.6; font-size: 13px; }
+.pwa-offline-tile .pwa-offline-warning { color: #92552B; border-left: 2px solid #C78538; padding-left: 12px; margin: 18px 0; }
+@media (max-width: 640px) {
+  .pwa-update-notice { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: none; align-items: flex-start; gap: 10px; }
+  .pwa-install-instructions { right: -64px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pwa-update-notice, .pwa-offline-screen { transition: none; animation: none; }
+}

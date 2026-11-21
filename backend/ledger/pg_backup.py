@@ -42,6 +42,8 @@ def _connection_args():
     settings = connection.settings_dict
     env = os.environ.copy()
     env["PGCONNECT_TIMEOUT"] = str(settings.get("OPTIONS", {}).get("connect_timeout", 3))
+    if settings.get("OPTIONS", {}).get("sslmode"):
+        env["PGSSLMODE"] = settings["OPTIONS"]["sslmode"]
     if settings.get("PASSWORD"):
         env["PGPASSWORD"] = settings["PASSWORD"]
     args = [

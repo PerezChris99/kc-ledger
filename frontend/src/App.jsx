@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, CalendarDays, ChevronDown, CircleDollarSign, Clock3, Command, LayoutDashboard, LogOut, Menu, Search, Settings2, ShieldAlert, Users, WalletCards, X, ArrowLeftRight } from "lucide-react";
-import { api, money } from "./api";
+import { api, money, isLoopbackOrigin } from "./api";
 import LoginPage from "./features/auth/LoginPage";
 import DashboardPage from "./features/dashboard/DashboardPage";
 import ClientsPage from "./features/clients/ClientsPage";
@@ -69,11 +69,39 @@ export default function App() {
     const now = new Date();
     const [search, setSearch] = useState("");
     const [moreOpen, setMoreOpen] = useState(false);
+    const [online, setOnline] = useState(() => navigator.onLine !== false || isLoopbackOrigin());
     const queryClient = useQueryClient();
     const session = useQuery({ queryKey: ["session"], queryFn: () => api("/api/session"), retry: false });
     const preferences = useQuery({ queryKey: ["settings"], queryFn: () => api("/api/settings"), enabled: Boolean(session.data?.authenticated) });
     useEffect(() => { const handler = (event) => { const target = event.detail; if (typeof target === "string")
         setActive(target); }; window.addEventListener("kc-ledger:navigate", handler); return () => window.removeEventListener("kc-ledger:navigate", handler); }, []);
+    useEffect(() => {
+        const connected = () => {
+            setOnline(true);
+            // Refresh session and active ledger queries; do not present stale
+            // in-memory financial values as server-authoritative after reconnect.
+            void queryClient.invalidateQueries();
+        };
+        const disconnected = () => {
+            if (!isLoopbackOrigin()) {
+                setOnline(false);
+                return;
+            }
+            // An OS-level "offline" event describes WAN connectivity, not
+            // whether this computer's local Docker/PostgreSQL app is running.
+            // Probe loopback before hiding a fully functional local ledger.
+            void fetch("/api/health", { cache: "no-store", credentials: "include" })
+                .then(response => setOnline(response.ok))
+                .catch(() => setOnline(false));
+        };
+        if (navigator.onLine === false && isLoopbackOrigin()) disconnected();
+        window.addEventListener("online", connected);
+        window.addEventListener("offline", disconnected);
+        return () => {
+            window.removeEventListener("online", connected);
+            window.removeEventListener("offline", disconnected);
+        };
+    }, [queryClient]);
     async function signOut() { try {
         await api("/api/auth/logout", { method: "POST", body: "{}" });
     }
@@ -81,6 +109,17 @@ export default function App() {
         await queryClient.invalidateQueries({ queryKey: ["session"] });
         setActive("dashboard");
     } }
+    if (!online)
+        return <main className="pwa-offline-screen" role="main">
+          <div className="pwa-offline-tile">
+            <span className="wordmark-symbol" aria-hidden="true">KC</span>
+            <p className="eyebrow">OFFLINE MODE</p>
+            <h1>KC Ledger is installed and ready to reconnect.</h1>
+            <p>Your app shell works offline, but client records, invoices, scoring, intelligence and transactions require the live server.</p>
+            <p className="pwa-offline-warning">No financial data is being cached, edited, queued or silently synchronized on this device.</p>
+            <button className="small-button" type="button" onClick={() => window.location.reload()}>Retry connection</button>
+          </div>
+        </main>;
     if (session.isLoading)
         return <main className="boot-screen"><span className="wordmark-symbol">KC</span><p className="eyebrow">VERIFYING PRIVATE SESSION</p></main>;
     if (!session.data?.authenticated)

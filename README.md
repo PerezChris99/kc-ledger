@@ -4,6 +4,15 @@
 
 **Primary database:** local PostgreSQL 15+ or managed PostgreSQL on Vercel; **SQLite WAL:** controlled desktop-only fallback, never silently synchronized. The frontend uses React/JavaScript/JSX and Vite; backend uses Django 5.2/Ninja, APScheduler and ReportLab. The native Windows application hosts Django locally through Waitress + WebView2.
 
+## Installable PWA and Vercel hosting
+
+KC Ledger builds a browser-installable Progressive Web App for desktop, Android and iOS with real PNG/maskable icons, service worker, update controls and an offline static shell. **A cloud-installed PWA still needs network access to its managed Django/PostgreSQL backend for all financial data and mutations.** For fully local use, start Docker Compose Django + PostgreSQL, open `http://127.0.0.1:8080` and install that separate loopback PWA; it works without public internet while local services run. Cloud and local data do **not** synchronize automatically.
+
+**Recommended managed free DB:** Prisma Postgres Free (currently 2 GB storage per workspace and a monthly operation limit). Standard PostgreSQL/psycopg is used, with pooled runtime URL, direct migration/backup URL and enforced TLS. Production Vercel deployment stays gated on offsite backup and tests until explicitly configured. Vercel Hobby restricts commercial use; select appropriate hosting.
+
+- [PWA installation and offline behavior](docs/16-pwa.md)
+- [Vercel + Prisma 2 GB setup and production acceptance](docs/31-pwa-vercel-prisma.md)
+
 ## Business-wide strategy and financial intelligence
 
 The intelligence engine now begins with a **Business command** workspace: recorded cash movement, costs by category, project and client cash contribution, overdue exposure, multi-period trends and anomalies, owner-defined goals, tracked strategy experiments, an illustrative cash sensitivity lab and an evidence-based client pitching guide. The local deterministic advisor challenges high-risk assumptions and previous underperforming decisions before optional Gemini/Grok second opinions.
