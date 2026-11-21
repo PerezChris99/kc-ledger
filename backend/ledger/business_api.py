@@ -202,9 +202,13 @@ def create_objective(request, payload: ObjectiveIn):
         raise HttpError(422, "Objective deadlines must be today or later.")
     if payload.due_date > timezone.localdate() + timedelta(days=1825):
         raise HttpError(422, "Objective deadlines must be within five years.")
+    from ledger.api_extra import _get_app_settings
+
+    currency = _get_app_settings()["base_currency"]
     item = BusinessObjective.objects.create(
         name=name,
         metric=payload.metric,
+        currency=currency,
         target=target,
         due_date=payload.due_date,
         description=description,
@@ -271,6 +275,12 @@ def create_strategy_decision(request, payload: StrategyIn):
         payload.metric == BusinessObjective.Metric.ACTIVE_CLIENTS
     )
     # A historical baseline cannot be reconstructed honestly from a live snapshot.
+    if (
+        objective is not None
+        and payload.metric != BusinessObjective.Metric.ACTIVE_CLIENTS
+        and objective.currency != snapshot["currency"]
+    ):
+        raise HttpError(409, "Goal currency differs from the current ledger currency; create a new target.")
     baseline = current if start == timezone.localdate() and no_fx_gap else None
     row = BusinessStrategyDecision.objects.create(
         title=title,
@@ -278,6 +288,7 @@ def create_strategy_decision(request, payload: StrategyIn):
         rationale=rationale,
         expected_effect=expected,
         metric=payload.metric,
+        currency=snapshot["currency"],
         objective=objective,
         client=client,
         baseline=baseline,

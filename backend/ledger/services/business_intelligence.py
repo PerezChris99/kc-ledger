@@ -527,7 +527,8 @@ def objective_progress(objective, snapshot):
     current = snapshot["metric_values"].get(objective.metric)
     max_direction = objective.metric in METRIC_MAXIMIZE
     metric_is_currency = objective.metric != BusinessObjective.Metric.ACTIVE_CLIENTS
-    available = current is not None and (
+    currency_mismatch = metric_is_currency and objective.currency != snapshot["currency"]
+    available = current is not None and not currency_mismatch and (
         not snapshot["data_quality"]["missing_fx"] or not metric_is_currency
     )
     target = objective.target
@@ -538,6 +539,8 @@ def objective_progress(objective, snapshot):
         "name": objective.name,
         "description": objective.description,
         "metric": objective.metric,
+        "currency": objective.currency,
+        "currency_mismatch": currency_mismatch,
         "target": amount(target),
         "current": amount(current) if available else None,
         "variance": amount(delta) if available else None,
@@ -559,7 +562,11 @@ def objective_progress(objective, snapshot):
 
 def decision_review(decision, snapshot):
     current = snapshot["metric_values"].get(decision.metric)
-    available = current is not None and (
+    currency_mismatch = (
+        decision.metric != BusinessObjective.Metric.ACTIVE_CLIENTS
+        and decision.currency != snapshot["currency"]
+    )
+    available = current is not None and not currency_mismatch and (
         not snapshot["data_quality"]["missing_fx"] or decision.metric == "active_clients"
     )
     delta = current - decision.baseline if available and decision.baseline is not None else None
@@ -578,6 +585,8 @@ def decision_review(decision, snapshot):
         "client_name": decision.client.name if decision.client else None,
         "objective_id": decision.objective_id,
         "metric": decision.metric,
+        "currency": decision.currency,
+        "currency_mismatch": currency_mismatch,
         "baseline": amount(decision.baseline) if decision.baseline is not None else None,
         "current": amount(current) if available else None,
         "observed_change": amount(delta) if delta is not None else None,
@@ -589,7 +598,11 @@ def decision_review(decision, snapshot):
         and decision.status
         in {BusinessStrategyDecision.Status.ACTIVE, BusinessStrategyDecision.Status.PLANNED},
         "outcome_note": decision.outcome_note,
-        "caution": "Before/after association, not a causal estimate; review confounders and incomplete data.",
+        "caution": (
+            "Base currency changed: do not compare different monetary units; rebaseline."
+            if currency_mismatch else
+            "Before/after association, not a causal estimate; review confounders and incomplete data."
+        ),
     }
 
 

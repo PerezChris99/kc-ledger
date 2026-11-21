@@ -56,6 +56,8 @@ Forecast readiness requires **at least three completed months containing recorde
 
 `BusinessStrategyDecision` stores an owner-defined category, hypothesis/rationale, expected outcome, tracked metric, linked goal/client (optional), start and review date, status and owner outcome note. A strategy started **today** captures the current recorded metric baseline; a historical strategy **does not invent a past baseline**. On review it displays actual latest metric, observed delta and whether that delta moved in the intended direction, with an explicit caution that changes may be due to other factors. Owners—not the model—mark actions reviewed or cancelled. All updates create a neutral append-only audit event.
 
+Money-valued objectives and strategy baselines are pinned to the ledger base currency at creation. If you later change the base currency, comparisons stop and are marked unavailable rather than silently interpreting USD targets as UGX (or vice versa). Set a new correctly denominated target before resuming monetary progress evaluation.
+
 The advisor evaluates recorded data and your stated goals together. Examples:
 
 | Evidence | What it challenges | Recommended next step |

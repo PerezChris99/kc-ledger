@@ -505,6 +505,7 @@ class BusinessObjective(models.Model):
     name = models.CharField(max_length=140)
     description = models.TextField(blank=True)
     metric = models.CharField(max_length=32, choices=Metric.choices)
+    currency = models.CharField(max_length=3, default="USD")
     target = models.DecimalField(max_digits=18, decimal_places=2)
     due_date = models.DateField()
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
@@ -549,6 +550,7 @@ class BusinessStrategyDecision(models.Model):
         Client, null=True, blank=True, on_delete=models.SET_NULL, related_name="strategy_decisions"
     )
     metric = models.CharField(max_length=32, choices=BusinessObjective.Metric.choices)
+    currency = models.CharField(max_length=3, default="USD")
     baseline = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     started_on = models.DateField()
     review_on = models.DateField()

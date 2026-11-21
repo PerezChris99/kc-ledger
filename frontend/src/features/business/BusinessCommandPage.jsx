@@ -357,7 +357,7 @@ export default function BusinessCommandPage() {
             <div className="command-goals">
               {data.objectives.map(goal => <article className="command-goal" key={goal.id}>
                 <div><strong>{goal.name}</strong><small>{moneyInputs.find(x => x.value === goal.metric)?.label} · due {goal.due_date}</small></div>
-                <p className="mono">{goal.current ?? "FX unavailable"} / {goal.target} <small>{goal.favorable === true ? "Met now" : goal.favorable === false ? "Below target" : "Cannot evaluate"}</small></p>
+                <p className="mono">{goal.current ?? "Unavailable"} / {goal.target}{goal.metric !== "active_clients" ? " " + goal.currency : ""} <small>{goal.favorable === true ? "Met now" : goal.favorable === false ? "Below target" : "Cannot evaluate"}</small></p>
                 <p className="settings-note">{goal.metric_context}. Current position is not a causal evaluation.</p>
                 <div className="intel-actions">{goal.status === "active" ?
                     <button type="button" className="small-button" disabled={busy}

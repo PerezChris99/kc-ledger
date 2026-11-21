@@ -494,3 +494,28 @@ def test_archived_clients_still_account_for_historical_cash_not_current_pitches(
     assert row["is_archived"] is True
     assert row["receipts"] == "120.00"
     assert report["metrics"]["top_client_share_pct"] == 100.0
+
+
+@pytest.mark.django_db
+def test_cash_goals_and_decision_baselines_fail_closed_after_currency_change():
+    from ledger.services.business_intelligence import decision_review
+
+    goal = BusinessObjective.objects.create(
+        name="Cash safety", metric="monthly_cash_result",
+        currency="USD", target=Decimal("50"),
+        due_date=timezone.localdate() + timedelta(days=15),
+    )
+    decision = BusinessStrategyDecision.objects.create(
+        title="Previous baseline", kind="pricing", metric="monthly_cash_result",
+        currency="USD", baseline=Decimal("75"),
+        started_on=timezone.localdate(), review_on=timezone.localdate(),
+    )
+    changed = build_business_snapshot(base="UGX")
+    g = objective_progress(goal, changed)
+    d = decision_review(decision, changed)
+    assert g["currency_mismatch"] is True
+    assert g["current"] is None
+    assert g["favorable"] is None
+    assert d["currency_mismatch"] is True
+    assert d["observed_change"] is None
+    assert d["direction_favorable"] is None
