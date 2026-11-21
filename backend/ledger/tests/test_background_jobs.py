@@ -101,10 +101,13 @@ def test_fx_refresh_rejects_network_failure_without_destroying_rates(monkeypatch
 def test_overdue_reminder_refreshes_stored_client_score():
     client = Client.objects.create(name="Daily Risk Refresh", score=50)
     Invoice.objects.create(
-        client=client, number="DUE-REFRESH-1", title="Past due services",
+        client=client,
+        number="DUE-REFRESH-1",
+        title="Past due services",
         issue_date=timezone.localdate() - timedelta(days=20),
         due_date=timezone.localdate() - timedelta(days=10),
-        amount=Decimal("250.00"), status=Invoice.Status.SENT,
+        amount=Decimal("250.00"),
+        status=Invoice.Status.SENT,
     )
     emit_due_reminders()
     client.refresh_from_db()
