@@ -4,9 +4,12 @@
 
 ## Source / local PostgreSQL
 
+Run these commands from the repository root.
+
 1. Install PostgreSQL 15+ and create an isolated `kc_ledger` database and login role; see [database runbook](postgresql-and-fallback.md).
 2. Copy `.env.example` to `.env`. Supply real `DJANGO_SECRET_KEY`, owner credentials, and `LEDGER_DB_PASSWORD`; keep it out of Git.
-3. Use Python 3.12 and Node.js 22.
+3. For the Vite development server, include `http://127.0.0.1:5173` in the comma-separated `DJANGO_CSRF_TRUSTED_ORIGINS` setting before starting Django.
+4. Use Python 3.12 and Node.js 22.
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -17,7 +20,7 @@ python backend/manage.py ensure_owner
 python backend/manage.py runserver 127.0.0.1:8000
 ```
 
-The repository-root `.env` is loaded automatically for the Django source runtime without overwriting existing OS environment variables. `db_status` must report `postgresql`. In a second terminal, run `npm ci` then `npm run dev`; Vite serves <http://127.0.0.1:5173> and proxies `/api` to Django.
+The repository-root `.env` is loaded automatically for the Django source runtime without overwriting existing OS environment variables. `db_status` must report `postgresql`. In a second terminal, run `npm ci` then `npm run dev -- --host 127.0.0.1`; Vite serves <http://127.0.0.1:5173> and proxies `/api` to Django.
 
 ## Docker browser route
 
