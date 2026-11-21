@@ -12,7 +12,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ClientIntelligenceProfile",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
                 ("signals", models.JSONField(default=dict)),
                 ("metrics", models.JSONField(default=dict)),
                 ("sample_size", models.PositiveIntegerField(default=0)),
@@ -31,7 +36,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ClientPatternAlert",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
                 ("signature", models.CharField(max_length=64)),
                 ("overlap", models.JSONField(default=list)),
                 ("similarity", models.PositiveSmallIntegerField(default=0)),
@@ -86,7 +96,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ClientIntelligenceObservation",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
                 ("observed_on", models.DateField()),
                 ("score", models.PositiveSmallIntegerField()),
                 ("risk_index", models.PositiveSmallIntegerField()),
@@ -113,7 +128,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ClientAdvisoryReport",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
                 ("provider", models.CharField(max_length=16)),
                 ("model_name", models.CharField(max_length=100, blank=True)),
                 ("advice", models.JSONField(default=dict)),
