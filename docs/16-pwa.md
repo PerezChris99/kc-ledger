@@ -28,6 +28,7 @@ Browser installation options vary by device/browser. iOS Safari does not provide
 ## Additional lifecycle/security safeguards
 
 - If an API request returns an expired-session 401, the app immediately hides the private dashboard and discards in-memory financial query results; explicit logout clears private query caches, too.
+- A same-origin BroadcastChannel immediately notifies other open KC Ledger tabs of sign-out/session revocation and clears their in-memory private queries. No financial data, session cookie or credential is sent through this channel. Visibility return triggers a fresh authenticated session check even though normal dashboard data is not unnecessarily polled in hidden tabs.
 - When the server cannot confirm a logout, the application reports that server-side revocation was **not** verified instead of claiming success.
 - A new service worker can be snoozed without losing access to a persistent "Update ready" control; applying it requires explicit confirmation because unfinished form edits may be lost.
 - Chrome/Edge install instructions remain discoverable even if no `beforeinstallprompt` event was issued.

@@ -22,6 +22,7 @@ Audit date: 21 November 2026. Focus: the existing single-owner financial operati
 | Sparse win rates | A one-off win could be misreported as predictive conversion ability | Observed win share appears only after at least **five closed** cases and is explicitly **not** a client-specific probability |
 | Risk of unverified offline writes | Browser caching or background request replay would endanger financial data integrity | Retained network-only API, private-data no-store, offline read-only app shell, and no background mutation queue |
 | Session privacy | Old React Query financial data could remain held after explicit server logout or an API 401 | Explicitly clear private query caches and immediately return to login; if remote logout fails, explain that server revocation was not verified |
+| Multi-tab privacy | Signing out in one PWA tab could leave an authenticated data view in another tab until refreshed | Same-origin ephemeral BroadcastChannel session revocation immediately hides private views in other tabs; on visibility return, recheck the session with the API |
 | PWA update control | Dismissing an update banner could hide a waiting version with no obvious path to apply it | A minimized update reminder remains accessible; every activation asks confirmation before losing unsaved form edits |
 | Install discoverability | Desktop users with no `beforeinstallprompt` event had no guidance | Added an explicit installation help entry for Chrome/Edge and Safari rather than a hidden control |
 

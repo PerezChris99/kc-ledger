@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, CalendarDays, ChevronDown, CircleDollarSign, Clock3, Command, LayoutDashboard, LogOut, Menu, Search, Settings2, ShieldAlert, Users, WalletCards, X, ArrowLeftRight } from "lucide-react";
 import { api, money, isLoopbackOrigin } from "./api";
+import { announceSessionEnded, listenForSessionEnd } from "./sessionSync";
 import LoginPage from "./features/auth/LoginPage";
 import DashboardPage from "./features/dashboard/DashboardPage";
 import ClientsPage from "./features/clients/ClientsPage";
@@ -104,7 +105,7 @@ export default function App() {
         };
     }, [queryClient]);
     useEffect(() => {
-        const expire = () => {
+        const clearPrivateSession = () => {
             void queryClient.cancelQueries().then(() => {
                 queryClient.removeQueries({
                     predicate: query => query.queryKey[0] !== "session"
@@ -113,9 +114,32 @@ export default function App() {
                 setActive("dashboard");
             });
         };
+        const expire = () => {
+            clearPrivateSession();
+            announceSessionEnded();
+        };
+        const stopListening = listenForSessionEnd(clearPrivateSession);
+        const refreshSessionOnReturn = () => {
+            if (document.visibilityState === "visible" &&
+                (navigator.onLine !== false || isLoopbackOrigin())) {
+                void queryClient.invalidateQueries({ queryKey: ["session"] });
+            }
+        };
         window.addEventListener("kc-ledger:session-expired", expire);
-        return () => window.removeEventListener("kc-ledger:session-expired", expire);
+        document.addEventListener("visibilitychange", refreshSessionOnReturn);
+        return () => {
+            stopListening();
+            window.removeEventListener("kc-ledger:session-expired", expire);
+            document.removeEventListener("visibilitychange", refreshSessionOnReturn);
+        };
     }, [queryClient]);
+    useEffect(() => {
+        if (session.data?.authenticated === false) {
+            queryClient.removeQueries({
+                predicate: query => query.queryKey[0] !== "session"
+            });
+        }
+    }, [queryClient, session.data?.authenticated]);
     async function signOut() {
         let verified = false;
         try {
@@ -133,6 +157,7 @@ export default function App() {
             });
             queryClient.setQueryData(["session"], { authenticated: false });
             setActive("dashboard");
+            announceSessionEnded();
             if (verified) setSignOutWarning("");
         }
     }
