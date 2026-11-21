@@ -95,6 +95,10 @@ All endpoints require the existing staff session; POST/PATCH operations enforce 
 
 New PostgreSQL/SQLite tables are created by migration `0007_business_intelligence`: `BusinessObjective`, `BusinessStrategyDecision`, `BusinessAdvisoryReport`. The existing financial schema, ledger balances, client scoring and historical pattern tables remain unchanged.
 
+## Proactive warnings
+
+A local daily scheduler and protected Vercel daily cron evaluate high-priority business findings **without an LLM**. A stable rule identifier is emitted as an append-only event at most once every seven days, preventing repeated alarm noise. The existing authenticated notification-polling endpoint and optional system notification/sound UI surface these events. There are no warnings from an empty ledger and no automated financial/customer decisions. Stored warnings represent evidence at issuance; new ledger changes may resolve underlying conditions.
+
 ## External provider privacy
 
 By default external providers are disabled. To use Gemini, configure `LEDGER_AI_ADVICE_ENABLED=1` and a valid private `GEMINI_API_KEY` on the server. xAI Grok requires `XAI_API_KEY`, `LEDGER_AI_ADVICE_ENABLED=1` and the explicit paid-use opt-in `LEDGER_ENABLE_METERED_GROK=1`; a free Grok web chat is **not** a free API entitlement. Availability and pricing change. No key is ever returned to the frontend.

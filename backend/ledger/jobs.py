@@ -265,6 +265,49 @@ def update_client_intelligence():
     refresh_intelligence()
 
 
+def emit_business_intelligence_alerts():
+    """Only high-impact data-backed business warnings, no model calls or spam.
+
+    A stable rule key is sent at most once every seven days. Existing audit
+    events cannot be edited, and a warning never changes financial source data.
+    """
+    from ledger.services.business_intelligence import build_business_snapshot
+
+    now = timezone.now()
+    snapshot = build_business_snapshot()
+    if not (
+        snapshot["metrics"]["receipt_count"]
+        or snapshot["metrics"]["expense_count"]
+        or Decimal(snapshot["metrics"]["billed_non_draft"]) > 0
+    ):
+        return 0
+    emitted_count = 0
+    for rule in snapshot["recommendations"]:
+        if rule["priority"] != "high" and not rule["id"].startswith("anomaly_"):
+            continue
+        if rule["id"] in {"unmeasured_cash", "cost_coverage"}:
+            continue
+        code = "business_alert_" + rule["id"]
+        if len(code) > 80:
+            continue
+        if Event.objects.filter(
+            kind=code, occurred_at__gte=now - timedelta(days=7)
+        ).exists():
+            continue
+        Event.objects.create(
+            kind=code,
+            category=Event.Category.MONEY,
+            polarity=-1,
+            title=("Business review: " + rule["title"])[:200],
+            detail=(rule["evidence"] + " Action: " + rule["action"])[:600],
+            occurred_at=now,
+        )
+        emitted_count += 1
+        if emitted_count >= 5:
+            break
+    return emitted_count
+
+
 def start_scheduler():
     global _scheduler
     if _scheduler and _scheduler.running:
@@ -313,6 +356,16 @@ def start_scheduler():
         "interval",
         minutes=20,
         id="client-intelligence",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        emit_business_intelligence_alerts,
+        "cron",
+        hour=9,
+        minute=0,
+        id="business-review-alerts",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

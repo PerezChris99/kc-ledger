@@ -40,6 +40,7 @@ def daily(request):
             jobs.draft_recurring_invoices()
             jobs.refresh_fx_rates()
             jobs.update_client_intelligence()
+            jobs.emit_business_intelligence_alerts()
         return JsonResponse({"status": "ok"})
     except Exception:
         logger.exception("Cron job failure")
