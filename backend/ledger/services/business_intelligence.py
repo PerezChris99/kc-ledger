@@ -643,7 +643,6 @@ def prioritize_goals_and_decisions(snapshot, objectives, decisions):
     )[:30]
 
 
-
 # Explicit rules and measurable targets drive strategy rankings, never
 # model-generated labels, sensitive attributes or implied market facts.
 STRATEGY_PLAYBOOKS = (
@@ -702,9 +701,7 @@ STRATEGY_PLAYBOOKS = (
     {
         "id": "quality",
         "name": "Repair the evidence before committing to a strategy",
-        "signals": {
-            "unmeasured_cash", "fx_gaps", "cost_coverage", "invoice_integrity"
-        },
+        "signals": {"unmeasured_cash", "fx_gaps", "cost_coverage", "invoice_integrity"},
         "goal_metrics": set(),
         "kind": "other",
         "steps": [
@@ -725,8 +722,7 @@ def recommend_strategy_paths(snapshot, objectives, decisions):
     """
     rule_codes = {row["id"] for row in snapshot["recommendations"]}
     goal_metrics = {
-        row.metric for row in objectives
-        if row.status == BusinessObjective.Status.ACTIVE
+        row.metric for row in objectives if row.status == BusinessObjective.Status.ACTIVE
     }
     results = []
     for item in STRATEGY_PLAYBOOKS:
@@ -735,9 +731,9 @@ def recommend_strategy_paths(snapshot, objectives, decisions):
         if not signals and not goals:
             continue
         history = [
-            row for row in decisions
-            if row.kind == item["kind"]
-            and row.status == BusinessStrategyDecision.Status.REVIEWED
+            row
+            for row in decisions
+            if row.kind == item["kind"] and row.status == BusinessStrategyDecision.Status.REVIEWED
         ]
         evaluations = [decision_review(row, snapshot) for row in history]
         favorable = sum(r["direction_favorable"] is True for r in evaluations)
@@ -753,49 +749,55 @@ def recommend_strategy_paths(snapshot, objectives, decisions):
             score = max(0, score - min(2, adverse))
         if favorable:
             score += 1
-        results.append({
-            "id": item["id"],
-            "strategy": item["name"],
-            "rank_score": score,
-            "why": (
-                "Triggered by " + ", ".join(signals) if signals
-                else "Aligned to an active, owner-defined measurable outcome"
-            ),
-            "related_goals": goals,
-            "rule_evidence": signals,
-            "experiments_reviewed": len(history),
-            "past_favorable_observations": favorable,
-            "past_unfavorable_observations": adverse,
-            "past_unmeasured_observations": unmeasured,
-            "steps": item["steps"],
-            "caution": item["risk"],
-            "limitations": (
-                "Ranking is heuristic and evidence-driven. Historical directional "
-                "changes do not prove a strategy caused the result."
-            ),
-        })
+        results.append(
+            {
+                "id": item["id"],
+                "strategy": item["name"],
+                "rank_score": score,
+                "why": (
+                    "Triggered by " + ", ".join(signals)
+                    if signals
+                    else "Aligned to an active, owner-defined measurable outcome"
+                ),
+                "related_goals": goals,
+                "rule_evidence": signals,
+                "experiments_reviewed": len(history),
+                "past_favorable_observations": favorable,
+                "past_unfavorable_observations": adverse,
+                "past_unmeasured_observations": unmeasured,
+                "steps": item["steps"],
+                "caution": item["risk"],
+                "limitations": (
+                    "Ranking is heuristic and evidence-driven. Historical directional "
+                    "changes do not prove a strategy caused the result."
+                ),
+            }
+        )
     if not results:
-        results.append({
-            "id": "baseline",
-            "strategy": "Build a measurable baseline before changing direction",
-            "rank_score": 0,
-            "why": "No specific current risk or measurable goal triggered a strategy.",
-            "related_goals": [],
-            "rule_evidence": [],
-            "experiments_reviewed": 0,
-            "past_favorable_observations": 0,
-            "past_unfavorable_observations": 0,
-            "past_unmeasured_observations": 0,
-            "steps": [
-                "Record complete cash transactions and attributable work hours.",
-                "Define one measurable goal and a review deadline.",
-                "Run one reversible change and compare the observed outcome.",
-            ],
-            "caution": "A generic plan is not a prediction of improved profitability.",
-            "limitations": "Insufficient objective evidence for a ranked strategy.",
-        })
+        results.append(
+            {
+                "id": "baseline",
+                "strategy": "Build a measurable baseline before changing direction",
+                "rank_score": 0,
+                "why": "No specific current risk or measurable goal triggered a strategy.",
+                "related_goals": [],
+                "rule_evidence": [],
+                "experiments_reviewed": 0,
+                "past_favorable_observations": 0,
+                "past_unfavorable_observations": 0,
+                "past_unmeasured_observations": 0,
+                "steps": [
+                    "Record complete cash transactions and attributable work hours.",
+                    "Define one measurable goal and a review deadline.",
+                    "Run one reversible change and compare the observed outcome.",
+                ],
+                "caution": "A generic plan is not a prediction of improved profitability.",
+                "limitations": "Insufficient objective evidence for a ranked strategy.",
+            }
+        )
     results.sort(key=lambda row: (-row["rank_score"], row["id"]))
     return [{**row, "rank": index + 1} for index, row in enumerate(results[:5])]
+
 
 def simulate(snapshot, pricing_pct=0, collection_pct=0, expenses_pct=0):
     """No claim of elasticity. Hypothetical lever changes, not projected sales."""

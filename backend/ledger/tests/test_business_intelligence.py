@@ -441,7 +441,7 @@ def test_strategy_priorities_align_to_goals_and_reject_causal_claims():
     objective = BusinessObjective.objects.create(
         name="Grow clients",
         metric=BusinessObjective.Metric.ACTIVE_CLIENTS,
-        target=Decimal("10"),
+        target=Decimal(10),
         due_date=timezone.localdate() + timedelta(days=120),
     )
     options = recommend_strategy_paths(snapshot, [objective], [])
@@ -460,7 +460,7 @@ def test_strategy_ranking_shows_reviewed_unfavorable_outcome_without_false_causa
         title="Prior cost cutting",
         kind="costs",
         metric="monthly_cash_result",
-        baseline=Decimal("100"),
+        baseline=Decimal(100),
         started_on=timezone.localdate() - timedelta(days=30),
         review_on=timezone.localdate(),
         status=BusinessStrategyDecision.Status.REVIEWED,
@@ -468,7 +468,7 @@ def test_strategy_ranking_shows_reviewed_unfavorable_outcome_without_false_causa
     goal = BusinessObjective.objects.create(
         name="Increase cash",
         metric="monthly_cash_result",
-        target=Decimal("1000"),
+        target=Decimal(1000),
         due_date=timezone.localdate() + timedelta(days=30),
     )
     recommendations = recommend_strategy_paths(snapshot, [goal], [strategy])
