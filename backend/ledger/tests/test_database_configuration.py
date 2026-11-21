@@ -96,7 +96,9 @@ def test_vercel_postgres_does_not_create_sqlite_directories(tmp_path):
     database_dir = tmp_path / "readonly-install" / "uncreated"
     config = select_database(
         _env(
-            tmp_path, LEDGER_DEPLOYMENT="vercel", LEDGER_DB_ENGINE="postgres",
+            tmp_path,
+            LEDGER_DEPLOYMENT="vercel",
+            LEDGER_DB_ENGINE="postgres",
             DATABASE_URL="postgres://kc:password@pooled.db.prisma.io:5432/postgres?sslmode=require",
         ),
         database_dir,
@@ -113,7 +115,8 @@ def test_vercel_rejects_insecure_transport(tmp_path, mode):
     with pytest.raises(RuntimeError, match="TLS"):
         select_database(
             _env(
-                tmp_path, LEDGER_DEPLOYMENT="vercel",
+                tmp_path,
+                LEDGER_DEPLOYMENT="vercel",
                 DATABASE_URL=f"postgres://kc:pw@db.prisma.io:5432/postgres?sslmode={mode}",
             ),
             tmp_path,
@@ -123,7 +126,8 @@ def test_vercel_rejects_insecure_transport(tmp_path, mode):
 def test_postgres_direct_endpoint_can_keep_session_timeouts(tmp_path):
     config = select_database(
         _env(
-            tmp_path, LEDGER_DEPLOYMENT="vercel",
+            tmp_path,
+            LEDGER_DEPLOYMENT="vercel",
             DATABASE_URL="postgresql://kc:pw@db.prisma.io:5432/postgres?sslmode=verify-full",
         ),
         tmp_path,

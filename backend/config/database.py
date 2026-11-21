@@ -48,11 +48,15 @@ def _postgres_database(environ):
         q = parse_qs(parsed.query)
         sslmode = q.get("sslmode", ["require"])[0]
         if environ.get("LEDGER_DEPLOYMENT") == "vercel" and sslmode not in {
-            "require", "verify-ca", "verify-full"
+            "require",
+            "verify-ca",
+            "verify-full",
         }:
             raise RuntimeError("Serverless PostgreSQL must use TLS sslmode=require or stronger.")
         if environ.get("LEDGER_DEPLOYMENT") == "vercel" and "sslmode" not in q:
-            raise RuntimeError("Serverless DATABASE_URL must declare TLS sslmode=require or stronger.")
+            raise RuntimeError(
+                "Serverless DATABASE_URL must declare TLS sslmode=require or stronger."
+            )
         # Prisma and similar PgBouncer transaction poolers reject PostgreSQL
         # startup '-c' session options. Keep query/connection timeouts at the
         # Django/function layer rather than using unsupported startup settings.
@@ -64,8 +68,7 @@ def _postgres_database(environ):
         }
         if not pooled:
             options["options"] = (
-                "-c statement_timeout=15000 "
-                "-c idle_in_transaction_session_timeout=30000"
+                "-c statement_timeout=15000 -c idle_in_transaction_session_timeout=30000"
             )
         return {
             "ENGINE": POSTGRES,
