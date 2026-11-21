@@ -196,7 +196,6 @@ export default function BusinessCommandPage() {
         return <div className="error-panel">Business intelligence cannot be loaded. Verify database migrations and API access.</div>;
     }
     const monthLabels = data.monthly.map(x => x.month.slice(2));
-    const complete = data.monthly.filter(x => x.complete);
     const categoryCosts = data.expense_categories.slice(0, 8);
     const clients = data.client_contribution.slice(0, 8);
     const chartMoney = value => moneyLike(value, data.currency);
