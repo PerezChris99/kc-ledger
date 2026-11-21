@@ -559,12 +559,8 @@ class BusinessStrategyDecision(models.Model):
     # An outcome is a point-in-time observation. Never silently recompute its
     # direction from later ledger edits, or label an unchanged result a win.
     reviewed_at = models.DateTimeField(null=True, blank=True)
-    review_value = models.DecimalField(
-        max_digits=18, decimal_places=2, null=True, blank=True
-    )
-    review_change = models.DecimalField(
-        max_digits=18, decimal_places=2, null=True, blank=True
-    )
+    review_value = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    review_change = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     review_favorable = models.BooleanField(null=True, blank=True)
     review_quality = models.CharField(max_length=24, default="not_reviewed")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -617,15 +613,14 @@ class BusinessOpportunity(models.Model):
 
     name = models.CharField(max_length=160)
     client = models.ForeignKey(
-        Client, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="business_opportunities"
+        Client,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="business_opportunities",
     )
-    source = models.CharField(
-        max_length=16, choices=Source.choices, default=Source.UNKNOWN
-    )
-    stage = models.CharField(
-        max_length=16, choices=Stage.choices, default=Stage.DISCOVERED
-    )
+    source = models.CharField(max_length=16, choices=Source.choices, default=Source.UNKNOWN)
+    stage = models.CharField(max_length=16, choices=Stage.choices, default=Stage.DISCOVERED)
     proposed_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal(0))
     currency = models.CharField(max_length=3, default="USD")
     opened_on = models.DateField()

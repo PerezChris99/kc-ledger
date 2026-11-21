@@ -3,8 +3,8 @@ from django.contrib import admin
 from .models import (
     BusinessAdvisoryReport,
     BusinessObjective,
-    BusinessStrategyDecision,
     BusinessOpportunity,
+    BusinessStrategyDecision,
     Client,
     ClientAdvisoryReport,
     ClientIntelligenceObservation,

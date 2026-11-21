@@ -13,8 +13,8 @@ from ninja.errors import HttpError
 from ledger.models import (
     BusinessAdvisoryReport,
     BusinessObjective,
-    BusinessStrategyDecision,
     BusinessOpportunity,
+    BusinessStrategyDecision,
     Client,
     ClientAdvisoryReport,
     Event,
@@ -186,7 +186,7 @@ def create_opportunity(request, payload: OpportunityIn):
     if (
         not payload.proposed_amount.is_finite()
         or payload.proposed_amount < 0
-        or payload.proposed_amount > Decimal("999999999999999")
+        or payload.proposed_amount > Decimal(999999999999999)
         or payload.proposed_amount.as_tuple().exponent < -2
     ):
         raise HttpError(422, "Quote must be a nonnegative finite amount with two decimals.")
@@ -211,7 +211,8 @@ def create_opportunity(request, payload: OpportunityIn):
         opened_on=timezone.localdate(),
     )
     _record_audit(
-        "opportunity_created", "Sales opportunity recorded",
+        "opportunity_created",
+        "Sales opportunity recorded",
         f"Opportunity {row.id} entered pipeline as {row.stage}.",
         client=client,
     )
@@ -226,10 +227,7 @@ def update_opportunity(request, opportunity_id: int, payload: OpportunityUpdate)
     next_action = _safe_text(payload.next_action, 280, "Next action")
     lost_reason = _safe_text(payload.lost_reason, 100, "Lost reason")
     try:
-        row = (
-            BusinessOpportunity.objects.select_for_update()
-            .get(id=opportunity_id)
-        )
+        row = BusinessOpportunity.objects.select_for_update().get(id=opportunity_id)
     except BusinessOpportunity.DoesNotExist as exc:
         raise HttpError(404, "Opportunity not found.") from exc
     old = row.stage
@@ -237,25 +235,27 @@ def update_opportunity(request, opportunity_id: int, payload: OpportunityUpdate)
     row.next_action = next_action
     row.closed_on = (
         timezone.localdate()
-        if row.stage in {
+        if row.stage
+        in {
             BusinessOpportunity.Stage.WON,
             BusinessOpportunity.Stage.LOST,
         }
         else None
     )
     row.lost_reason = lost_reason if row.stage == BusinessOpportunity.Stage.LOST else ""
-    row.save(update_fields=[
-        "stage", "next_action", "closed_on", "lost_reason", "updated_at"
-    ])
+    row.save(update_fields=["stage", "next_action", "closed_on", "lost_reason", "updated_at"])
     _record_audit(
-        "opportunity_stage_changed", "Sales opportunity updated",
+        "opportunity_stage_changed",
+        "Sales opportunity updated",
         f"Opportunity {row.id}: {old} to {row.stage}. "
         "Closed outcomes are owner-recorded, never automatically inferred.",
         client=row.client,
     )
-    return {"id": row.id, "stage": row.stage, "closed_on": (
-        row.closed_on.isoformat() if row.closed_on else None
-    )}
+    return {
+        "id": row.id,
+        "stage": row.stage,
+        "closed_on": (row.closed_on.isoformat() if row.closed_on else None),
+    }
 
 
 @router.get("/pitch/{client_id}")
@@ -448,7 +448,9 @@ def review_strategy_decision(request, decision_id: int, payload: StrategyReview)
         BusinessStrategyDecision.Status.REVIEWED,
         BusinessStrategyDecision.Status.CANCELLED,
     }:
-        raise HttpError(409, "A completed review is historical evidence. Log a new experiment instead.")
+        raise HttpError(
+            409, "A completed review is historical evidence. Log a new experiment instead."
+        )
     row.status = payload.status
     row.outcome_note = outcome
     fields = ["status", "outcome_note", "updated_at"]
@@ -482,7 +484,6 @@ def review_strategy_decision(request, decision_id: int, payload: StrategyReview)
         "review_value": amount(row.review_value) if row.review_value is not None else None,
         "review_favorable": row.review_favorable,
     }
-
 
 
 def _anonymized_business_context(snapshot, objectives, decisions):

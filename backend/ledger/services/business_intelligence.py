@@ -329,7 +329,8 @@ def build_business_snapshot(as_of=None, base=None):
     )
     recent_share = (
         max(recent_client_receipts.values(), default=ZERO) / recent_receipts
-        if recent_receipts else ZERO
+        if recent_receipts
+        else ZERO
     )
     project_rows = []
     for eng in Engagement.all_objects.select_related("client").all():
@@ -632,9 +633,7 @@ def decision_review(decision, snapshot):
         and (not snapshot["data_quality"]["missing_fx"] or not monetary)
     )
     current = live_current if available else None
-    observed = (
-        decision.review_change if decision.reviewed_at is not None else None
-    )
+    observed = decision.review_change if decision.reviewed_at is not None else None
     return {
         "id": decision.id,
         "title": decision.title,
@@ -650,23 +649,21 @@ def decision_review(decision, snapshot):
         "baseline": amount(decision.baseline) if decision.baseline is not None else None,
         "current": amount(current) if current is not None else None,
         "review_value": (
-            amount(decision.review_value)
-            if decision.review_value is not None else None
+            amount(decision.review_value) if decision.review_value is not None else None
         ),
         "observed_change": amount(observed) if observed is not None else None,
         "direction_favorable": (
             decision.review_favorable if decision.reviewed_at is not None else None
         ),
-        "reviewed_at": (
-            decision.reviewed_at.isoformat() if decision.reviewed_at else None
-        ),
+        "reviewed_at": (decision.reviewed_at.isoformat() if decision.reviewed_at else None),
         "review_quality": decision.review_quality,
         "status": decision.status,
         "started_on": decision.started_on.isoformat(),
         "review_on": decision.review_on.isoformat(),
         "review_due": (
             decision.review_on <= date.fromisoformat(snapshot["as_of"])
-            and decision.status in {
+            and decision.status
+            in {
                 BusinessStrategyDecision.Status.ACTIVE,
                 BusinessStrategyDecision.Status.PLANNED,
             }
@@ -674,10 +671,10 @@ def decision_review(decision, snapshot):
         "outcome_note": decision.outcome_note,
         "caution": (
             "Base currency changed: live comparisons are unavailable; prior captured reviews remain frozen."
-            if currency_mismatch else
-            "Captured review direction is a historical observation, never causal proof."
-            if decision.reviewed_at else
-            "No favorable outcome is claimed until a dated owner review records its evidence."
+            if currency_mismatch
+            else "Captured review direction is a historical observation, never causal proof."
+            if decision.reviewed_at
+            else "No favorable outcome is claimed until a dated owner review records its evidence."
         ),
     }
 
@@ -697,13 +694,8 @@ def review_outcome(decision, snapshot):
     change = current - decision.baseline
     if change == ZERO:
         return current, change, None, "unchanged"
-    favorable = (
-        change > ZERO
-        if decision.metric in METRIC_MAXIMIZE
-        else change < ZERO
-    )
+    favorable = change > ZERO if decision.metric in METRIC_MAXIMIZE else change < ZERO
     return current, change, favorable, "observed"
-
 
 
 def prioritize_goals_and_decisions(snapshot, objectives, decisions):

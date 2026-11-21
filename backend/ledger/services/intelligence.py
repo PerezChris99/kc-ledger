@@ -6,7 +6,7 @@ only explicit event categories and objective ledger/payment history.
 """
 
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from hashlib import sha256
 
 from django.db import transaction
@@ -18,9 +18,9 @@ from ledger.models import (
     ClientIntelligenceObservation,
     ClientIntelligenceProfile,
     ClientPatternAlert,
-    Meta,
     Event,
     Invoice,
+    Meta,
     Payment,
 )
 
@@ -259,9 +259,11 @@ def read_intelligence(max_age_seconds=1200):
     materialization. This prevents every dashboard tab from doing O(N²) pattern
     comparisons and writing today's observations.
     """
-    marker = Meta.objects.filter(key="client_intelligence_refreshed_at").values_list(
-        "value", flat=True
-    ).first()
+    marker = (
+        Meta.objects.filter(key="client_intelligence_refreshed_at")
+        .values_list("value", flat=True)
+        .first()
+    )
     if marker:
         try:
             refreshed = datetime.fromisoformat(marker)
@@ -276,13 +278,10 @@ def read_intelligence(max_age_seconds=1200):
             )
             live_scores = dict(Client.all_objects.values_list("id", "score"))
             if len(profiles) == len(live_scores) and all(
-                row["score_snapshot"] == live_scores.get(row["client_id"])
-                for row in profiles
+                row["score_snapshot"] == live_scores.get(row["client_id"]) for row in profiles
             ):
                 return {
-                    row["client_id"]: {
-                        "signals": row["signals"], "metrics": row["metrics"]
-                    }
+                    row["client_id"]: {"signals": row["signals"], "metrics": row["metrics"]}
                     for row in profiles
                 }
     return refresh_intelligence()
@@ -387,8 +386,7 @@ def refresh_intelligence():
     for current in clients:
         current_info = analyses[current.id]
         current_codes = [
-            code for code in NEGATIVE_SIGNALS
-            if current_info["signals"].get(code, 0) > 0
+            code for code in NEGATIVE_SIGNALS if current_info["signals"].get(code, 0) > 0
         ]
         candidates = Counter()
         for code in current_codes:
@@ -408,9 +406,7 @@ def refresh_intelligence():
                     and previous.status != Client.Status.BLACKLISTED
                 ):
                     continue
-                similarity, overlap = _similarity(
-                    current_info["signals"], previous_info["signals"]
-                )
+                similarity, overlap = _similarity(current_info["signals"], previous_info["signals"])
                 if similarity:
                     matches.append((previous, similarity, overlap))
         # A client becomes an available historical reference only AFTER the
@@ -424,10 +420,12 @@ def refresh_intelligence():
         for previous, similarity, overlap in matches[:5]:
             active_previous_ids.add(previous.id)
             fingerprint = sha256(
-                ("|".join(
-                    f"{entry['kind']}:{entry['current_count']}:{entry['past_count']}"
-                    for entry in sorted(overlap, key=lambda row: row["kind"])
-                )).encode("ascii")
+                (
+                    "|".join(
+                        f"{entry['kind']}:{entry['current_count']}:{entry['past_count']}"
+                        for entry in sorted(overlap, key=lambda row: row["kind"])
+                    )
+                ).encode("ascii")
             ).hexdigest()
             existing = existing_alerts.get((current.id, previous.id))
             state = ClientPatternAlert.Status.OPEN

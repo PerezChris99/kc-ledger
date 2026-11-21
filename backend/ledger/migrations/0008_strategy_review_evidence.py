@@ -19,16 +19,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="businessstrategydecision",
             name="review_value",
-            field=models.DecimalField(
-                blank=True, decimal_places=2, max_digits=18, null=True
-            ),
+            field=models.DecimalField(blank=True, decimal_places=2, max_digits=18, null=True),
         ),
         migrations.AddField(
             model_name="businessstrategydecision",
             name="review_change",
-            field=models.DecimalField(
-                blank=True, decimal_places=2, max_digits=18, null=True
-            ),
+            field=models.DecimalField(blank=True, decimal_places=2, max_digits=18, null=True),
         ),
         migrations.AddField(
             model_name="businessstrategydecision",

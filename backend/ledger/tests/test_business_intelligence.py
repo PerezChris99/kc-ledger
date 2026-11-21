@@ -468,8 +468,8 @@ def test_strategy_ranking_shows_reviewed_unfavorable_outcome_without_false_causa
         review_on=timezone.localdate(),
         status=BusinessStrategyDecision.Status.REVIEWED,
         reviewed_at=timezone.now(),
-        review_value=Decimal("0"),
-        review_change=Decimal("-100"),
+        review_value=Decimal(0),
+        review_change=Decimal(-100),
         review_favorable=False,
         review_quality="observed",
     )
@@ -543,7 +543,7 @@ def test_strategy_review_is_frozen_and_no_change_is_not_a_success(owner, paid_cl
         title="Trial milestone deposits",
         kind=BusinessStrategyDecision.Kind.COLLECTIONS,
         metric=BusinessObjective.Metric.MONTHLY_RECEIPTS,
-        baseline=Decimal("0"),
+        baseline=Decimal(0),
         currency="USD",
         started_on=timezone.localdate(),
         review_on=timezone.localdate(),
@@ -565,12 +565,13 @@ def test_strategy_review_is_frozen_and_no_change_is_not_a_success(owner, paid_cl
     assert decision.review_favorable is None
     # This new payment changes live totals, but may not rewrite the review.
     recent = invoice(
-        paid_client, 130, timezone.localdate() + timedelta(days=7),
+        paid_client,
+        130,
+        timezone.localdate() + timedelta(days=7),
         number="REVIEW-FROZEN-INVOICE",
     )
     Payment.objects.create(
-        client=paid_client, invoice=recent,
-        amount=Decimal("130"), paid_on=timezone.localdate()
+        client=paid_client, invoice=recent, amount=Decimal(130), paid_on=timezone.localdate()
     )
     live = build_business_snapshot(base="USD")
     shown = decision_review(decision, live)
@@ -604,7 +605,7 @@ def test_review_of_unmeasurable_strategy_stores_data_quality_instead_of_win(owne
     response = owner.patch(
         f"/api/intelligence/business/decisions/{strategy.id}",
         data={"status": "reviewed", "outcome_note": "No prior trustworthy baseline"},
-        content_type="application/json"
+        content_type="application/json",
     )
     assert response.status_code == 200
     assert response.json()["review_quality"] == "missing_baseline"
@@ -617,16 +618,19 @@ def test_review_of_unmeasurable_strategy_stores_data_quality_instead_of_win(owne
 def test_future_dated_financial_entries_never_inflate_current_cash(paid_client):
     today = timezone.localdate()
     inv = invoice(
-        paid_client, 100, today + timedelta(days=12),
+        paid_client,
+        100,
+        today + timedelta(days=12),
         number="FUTURE-VALID-INVOICE",
     )
     Payment.objects.create(
-        client=paid_client, invoice=inv,
-        amount=Decimal("100"), paid_on=today + timedelta(days=14)
+        client=paid_client, invoice=inv, amount=Decimal(100), paid_on=today + timedelta(days=14)
     )
     Expense.objects.create(
-        category="Future plan", amount=Decimal("70"), currency="USD",
-        spent_on=today + timedelta(days=20)
+        category="Future plan",
+        amount=Decimal(70),
+        currency="USD",
+        spent_on=today + timedelta(days=20),
     )
     snap = build_business_snapshot(base="USD")
     assert snap["metrics"]["collected"] == "0.00"
@@ -644,17 +648,15 @@ def test_forecast_refuses_partial_currency_conversion_even_with_history(paid_cli
         from ledger.services.business_intelligence import _shift_month
 
         date_paid = _shift_month(anchor, -months) + timedelta(days=8)
-        inv = invoice(
-            paid_client, 100, date_paid,
-            number=f"MISSING-FX-{months}"
-        )
+        inv = invoice(paid_client, 100, date_paid, number=f"MISSING-FX-{months}")
         Payment.objects.create(
-            invoice=inv, client=paid_client,
-            amount=Decimal("100"), paid_on=date_paid
+            invoice=inv, client=paid_client, amount=Decimal(100), paid_on=date_paid
         )
     Expense.objects.create(
-        category="Unconverted expense", amount=Decimal("25"),
-        currency="EUR", spent_on=timezone.localdate()
+        category="Unconverted expense",
+        amount=Decimal(25),
+        currency="EUR",
+        spent_on=timezone.localdate(),
     )
     snap = build_business_snapshot(base="USD")
     assert snap["forecast"]["available"] is False
@@ -719,7 +721,8 @@ def test_sales_pipeline_validates_currency_quote_and_source(owner):
         payload = {**base, **changes}
         response = owner.post(
             "/api/intelligence/business/opportunities",
-            data=payload, content_type="application/json",
+            data=payload,
+            content_type="application/json",
         )
         assert response.status_code == 422, (payload, response.content)
 
@@ -731,21 +734,23 @@ def test_observed_sales_win_share_requires_five_closed_cases():
 
     for i in range(4):
         BusinessOpportunity.objects.create(
-            name=f"Sales case {i}", stage=(
-                BusinessOpportunity.Stage.WON
-                if i < 3 else BusinessOpportunity.Stage.LOST
-            ),
-            source="outbound", currency="USD",
-            proposed_amount=Decimal("200"),
+            name=f"Sales case {i}",
+            stage=(BusinessOpportunity.Stage.WON if i < 3 else BusinessOpportunity.Stage.LOST),
+            source="outbound",
+            currency="USD",
+            proposed_amount=Decimal(200),
             opened_on=timezone.localdate() - timedelta(days=25),
             closed_on=timezone.localdate() - timedelta(days=2),
         )
     assert pipeline_overview()["observed_win_share_pct"] is None
     BusinessOpportunity.objects.create(
-        name="Fifth case", stage=BusinessOpportunity.Stage.LOST,
-        source="outbound", currency="USD",
-        proposed_amount=Decimal("200"), opened_on=timezone.localdate(),
-        closed_on=timezone.localdate()
+        name="Fifth case",
+        stage=BusinessOpportunity.Stage.LOST,
+        source="outbound",
+        currency="USD",
+        proposed_amount=Decimal(200),
+        opened_on=timezone.localdate(),
+        closed_on=timezone.localdate(),
     )
     result = pipeline_overview()
     assert result["closed_sample"] == 5

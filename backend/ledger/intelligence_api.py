@@ -30,8 +30,8 @@ from ledger.services.intelligence import (
     POSITIVE_SIGNALS,
     evidence_for_provider,
     local_recommendations,
-    refresh_intelligence,
     read_intelligence,
+    refresh_intelligence,
 )
 
 router = Router(tags=["client-intelligence"])
