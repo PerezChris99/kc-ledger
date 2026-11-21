@@ -262,8 +262,7 @@ def refresh_intelligence():
     analyses = {}
     ids = [client.id for client in clients]
     existing_profiles = {
-        row.client_id: row
-        for row in ClientIntelligenceProfile.objects.filter(client_id__in=ids)
+        row.client_id: row for row in ClientIntelligenceProfile.objects.filter(client_id__in=ids)
     }
     today = timezone.localdate()
     existing_observations = {
@@ -302,12 +301,13 @@ def refresh_intelligence():
             "evidence_count": samples[client.id],
         }
         if previous_observation is None:
-            new_observations.append(ClientIntelligenceObservation(
-                client_id=client.id, observed_on=today, **record_values
-            ))
+            new_observations.append(
+                ClientIntelligenceObservation(
+                    client_id=client.id, observed_on=today, **record_values
+                )
+            )
         elif any(
-            getattr(previous_observation, field) != value
-            for field, value in record_values.items()
+            getattr(previous_observation, field) != value for field, value in record_values.items()
         ):
             for field, value in record_values.items():
                 setattr(previous_observation, field, value)
@@ -385,8 +385,10 @@ def refresh_intelligence():
                     setattr(existing, key, value)
                 existing.save(update_fields=[*values, "updated_at"])
         stale_ids = [
-            alert.id for (client_id, reference_id), alert in existing_alerts.items()
-            if client_id == current.id and reference_id not in active_previous_ids
+            alert.id
+            for (client_id, reference_id), alert in existing_alerts.items()
+            if client_id == current.id
+            and reference_id not in active_previous_ids
             and alert.status != ClientPatternAlert.Status.RESOLVED
         ]
         if stale_ids:

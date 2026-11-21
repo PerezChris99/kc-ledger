@@ -271,7 +271,8 @@ def test_no_database_writes_when_cached_evidence_is_unchanged():
     with CaptureQueriesContext(connection) as queries:
         refresh_intelligence()
     writes = [
-        row["sql"] for row in queries
+        row["sql"]
+        for row in queries
         if row["sql"].strip().upper().startswith(("INSERT ", "UPDATE ", "DELETE "))
     ]
     assert not writes
