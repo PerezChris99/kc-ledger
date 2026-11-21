@@ -79,6 +79,7 @@ def refresh_instalment_states():
 def emit_due_reminders():
     now = timezone.now()
     today = timezone.localdate()
+    affected_clients = set()
     for invoice in (
         Invoice.objects.select_related("client")
         .filter(due_date__lt=today)
@@ -99,6 +100,7 @@ def emit_due_reminders():
                 amount=invoice.amount,
                 occurred_at=now,
             )
+            affected_clients.add(invoice.client_id)
     for instalment in (
         Instalment.objects.select_related("invoice", "client")
         .filter(due_date__range=(today, today + timedelta(days=3)))
@@ -121,6 +123,14 @@ def emit_due_reminders():
                 amount=instalment.amount,
                 occurred_at=now,
             )
+
+    # As due dates roll over, stored health scores must reflect new overdue
+    # invoices even if the owner made no financial edit that day.
+    if affected_clients:
+        from ledger.api import _refresh_score
+
+        for changed in Client.objects.filter(pk__in=affected_clients):
+            _refresh_score(changed)
 
 
 def detect_ghosting():
@@ -158,6 +168,9 @@ def detect_ghosting():
             detail=f"No communication event has been recorded for {silence_days} days. Review manually; this is a signal, not proof of ghosting.",
             occurred_at=timezone.now(),
         )
+        from ledger.api import _refresh_score
+
+        _refresh_score(client)
 
 
 def draft_recurring_invoices():
@@ -201,6 +214,9 @@ def draft_recurring_invoices():
                 amount=invoice.amount,
                 occurred_at=timezone.now(),
             )
+            from ledger.api import _refresh_score
+
+            _refresh_score(engagement.client)
 
 
 def refresh_fx_rates():
@@ -242,6 +258,13 @@ def refresh_fx_rates():
         logger.exception("FX refresh failed; existing stored rates were retained.")
 
 
+def update_client_intelligence():
+    """Rebuild evidence snapshots without invoking any external AI provider."""
+    from ledger.services.intelligence import refresh_intelligence
+
+    refresh_intelligence()
+
+
 def start_scheduler():
     global _scheduler
     if _scheduler and _scheduler.running:
@@ -281,6 +304,15 @@ def start_scheduler():
         hour=6,
         minute=0,
         id="recurring-invoices",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        update_client_intelligence,
+        "interval",
+        minutes=20,
+        id="client-intelligence",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

@@ -401,3 +401,86 @@ class LoginThrottle(models.Model):
     window_started_at = models.DateTimeField()
     locked_until = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class ClientIntelligenceProfile(models.Model):
+    """Rebuildable, identifiable client facts derived from internal ledger records."""
+
+    client = models.OneToOneField(
+        Client, on_delete=models.CASCADE, related_name="intelligence_profile"
+    )
+    signals = models.JSONField(default=dict)
+    metrics = models.JSONField(default=dict)
+    sample_size = models.PositiveIntegerField(default=0)
+    score_snapshot = models.PositiveSmallIntegerField(default=50)
+    assessed_at = models.DateTimeField(auto_now=True)
+
+
+class ClientPatternAlert(models.Model):
+    """Reviewable behaviour overlap, never an automatic client rejection."""
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        REVIEWED = "reviewed", "Reviewed"
+        DISMISSED = "dismissed", "Dismissed"
+        RESOLVED = "resolved", "Resolved"
+
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="pattern_alerts")
+    reference_client = models.ForeignKey(
+        Client, on_delete=models.CASCADE, related_name="historical_matches"
+    )
+    signature = models.CharField(max_length=64)
+    overlap = models.JSONField(default=list)
+    similarity = models.PositiveSmallIntegerField(default=0)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    review_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["client", "reference_client"], name="unique_pattern_client_pair"
+            ),
+            models.CheckConstraint(
+                condition=Q(similarity__gte=0, similarity__lte=100),
+                name="pattern_similarity_0_100",
+            ),
+        ]
+        indexes = [models.Index(fields=["client", "status"], name="pattern_client_status_idx")]
+
+
+class ClientIntelligenceObservation(models.Model):
+    """Daily score and risk snapshots for genuine longitudinal charts."""
+
+    client = models.ForeignKey(
+        Client, on_delete=models.CASCADE, related_name="intelligence_history"
+    )
+    observed_on = models.DateField()
+    score = models.PositiveSmallIntegerField()
+    risk_index = models.PositiveSmallIntegerField()
+    evidence_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-observed_on"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["client", "observed_on"], name="unique_client_intel_day"
+            )
+        ]
+        indexes = [models.Index(fields=["observed_on"], name="intel_observed_day_idx")]
+
+
+class ClientAdvisoryReport(models.Model):
+    """Owner-requested advisory only; models cannot modify source financial facts."""
+
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="advisory_reports")
+    provider = models.CharField(max_length=16)
+    model_name = models.CharField(max_length=100, blank=True)
+    advice = models.JSONField(default=dict)
+    evidence_signature = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["client", "created_at"], name="advice_client_created_idx")]

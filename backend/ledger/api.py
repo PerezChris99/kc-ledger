@@ -620,11 +620,19 @@ def create_invoice(request, payload: InvoiceIn):
     except Client.DoesNotExist:
         raise HttpError(404, "Client not found.")
     client_score = compute_client_score(_client_snapshot(client))
-    if client.status == Client.Status.BLACKLISTED or client_score.score < 40:
+    if client.status == Client.Status.BLACKLISTED:
         raise HttpError(
             409,
-            f"Invoice creation blocked: {client.name} is classified {client_score.tier} (score {client_score.score}). Review the client dossier before taking on new work.",
+            "This client was explicitly blacklisted by the owner; review the record before invoicing.",
         )
+    # A score is an advisory indicator, not an autonomous decision-maker.
+    # The owner can invoice a low-scoring client with full visibility.
+    score_warning = (
+        f"Client health score {client_score.score}/100 is low. "
+        "Review documented risks, contract terms and payment safeguards."
+        if client_score.score < 40
+        else None
+    )
     engagement = None
     if payload.engagement_id:
         try:
@@ -650,7 +658,12 @@ def create_invoice(request, payload: InvoiceIn):
         occurred_at=timezone.now(),
     )
     _refresh_score(client)
-    return {"id": inv.id, "number": inv.number, "status": inv.status}
+    return {
+        "id": inv.id,
+        "number": inv.number,
+        "status": inv.status,
+        "risk_warning": score_warning,
+    }
 
 
 @router.patch("/invoices/{invoice_id}")

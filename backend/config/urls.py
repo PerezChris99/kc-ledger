@@ -7,6 +7,7 @@ from django.urls import path, re_path
 from ledger.api import router
 from ledger.api_extra import router as extra_router
 from ledger.cron_views import daily
+from ledger.intelligence_api import router as intelligence_router
 from ledger.security import staff_session_auth
 from ledger.update_manifest_views import latest
 from ledger.update_views import updates
@@ -18,6 +19,7 @@ from config.version import build_info
 api = NinjaAPI(title="KC Ledger API", version=build_info()["version"], auth=staff_session_auth)
 api.add_router("/", router)
 api.add_router("/", extra_router)
+api.add_router("/intelligence/", intelligence_router)
 
 urlpatterns = [
     path("api/version", version),
