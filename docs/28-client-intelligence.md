@@ -28,6 +28,7 @@ An owner can mark alerts **reviewed** or **dismissed**, while retaining the evid
 
 - Recording an observable signal in the Client Intelligence page appends an immutable Event, recalculates the primary eight-factor score and refreshes all cross-client comparisons in one DB transaction.
 - A single on-prem scheduler refreshes intelligence every 20 minutes; the protected Vercel Cron performs its refresh with its scheduled ledger tasks.
+- Daily overdue reminders, ghosting alerts, and newly drafted recurring invoices refresh affected clients' stored health scores, so time-sensitive indicators do not remain stale until the owner makes a financial edit.
 - Opening the portfolio/client intelligence endpoints refreshes only derived projections and the daily observation snapshot. It does not mutate invoices, payments or the official owner classification.
 - Archived/soft-deleted clients remain available as historical references but no longer appear as current prospects. There is no automatic deletion or person matching based on PII.
 - Initial event, invoice and payment metrics are aggregated in SQL; per-client profile and match rows are indexed and idempotent.
