@@ -4,6 +4,17 @@ KC Ledger is a private financial operations and decision-support system for an o
 
 A large contract can keep a business busy for weeks while contributing little cash. KC Ledger gives the owner enough detail to see why. An unpaid instalment calls for a collections conversation. Repeated revisions that consume the project budget call for a different scope or price on the next proposal.
 
+## The workspace at a glance
+
+| Area | What it helps the owner do |
+| --- | --- |
+| Sales and client development | Follow leads from first contact to proposal and recorded win or loss. Use previous engagements to prepare the next pitch or discuss payment terms. |
+| Work and billing | Connect projects, time entries, and expenses to client invoices. For recurring retainers, the system can draft the next invoice for the owner to review. |
+| Collections | See outstanding and overdue amounts, track partial payments and instalment plans, and follow up using a due-date calendar, reminders, and PDF invoice statements. Disputes and write-offs retain their place in the client history. |
+| Client relationships | Review payment habits, repeat work, and documented conduct together. A client dossier brings the history into one place, and pattern alerts give the owner specific evidence to review before taking on more work. |
+| Financial reporting | Compare receipts and costs across months, clients, and engagements. Multi-currency reporting uses recorded exchange rates and flags gaps that could affect a comparison. |
+| Business Command | See whether receipts depend heavily on one payer, investigate unusual changes, track progress toward goals, and explore how different collection or spending assumptions would affect cash. |
+
 ## The economics of a single engagement
 
 Suppose a project was invoiced at **UGX 2,000,000**. The client has paid **UGX 800,000**, the owner has recorded **UGX 200,000** in direct expenses, and the work has taken **20 hours**. Three figures describe three different aspects of that engagement.
@@ -28,14 +39,6 @@ flowchart TD
     Schedule[Due dates] --> Collection
 ```
 
-## What the owner can see
-
-**Sales and delivery.** Opportunities retain their lead source, quoted value, next action, and eventual win or loss. Engagements carry the hours, expenses, and invoices for the work itself. This separation lets the owner review how proposals performed while counting cash only when a payment is recorded.
-
-**Collections and client relationships.** Instalment schedules, reminders, and PDF statements support follow-up. An eight-factor client score draws on payment speed, overdue exposure, repeat work, and other recorded signals. The underlying history helps the owner distinguish a first missed deadline from a pattern worth considering before extending payment terms again.
-
-**The business as a whole.** Business Command brings receipts, costs, overdue balances, and payer concentration into one view. The owner can see when a strong month depended on one client, examine which expense category increased, or explore how a change in collections would affect cash. Scenarios describe the consequences of an assumption. Sales outcomes come from recorded wins and losses.
-
 ## How a strategy is reviewed
 
 An owner who wants to reduce overdue balances can record the current amount, choose a change in payment terms, and set a review date. The review preserves the evidence available on that date. A payment arriving the following week updates the live ledger while the earlier assessment keeps its original figures.
@@ -53,12 +56,14 @@ flowchart TD
 
 The core analysis runs on explicit rules and ledger evidence. Optional AI advice uses de-identified indicators with the owner's consent. Pricing, client terms, and financial decisions remain with the owner.
 
+## Access and continuity
+
+KC Ledger is available as a browser workspace, an installable web app, and a native Windows desktop application. A local installation can work without public internet while its local services are available. The hosted app can open its interface offline and reconnects to the server for financial records and transactions. Local and hosted installations keep independent ledgers.
+
 ## Integrity and privacy
 
-A payment, its instalment allocations, the invoice update, and the audit event are recorded together in one database transaction. Paid amounts are allocated to the earliest unpaid instalments first. Archiving a client preserves its historical contribution, so past business performance remains visible as the active client list changes.
+A payment, its instalment allocations, the invoice update, and the audit event are recorded together in one database transaction. Payments on instalment plans are allocated to the earliest unpaid instalments first. Archiving a client preserves its historical contribution, so past business performance remains visible as the active client list changes.
 
 Access to the workspace is restricted to the owner. Private financial responses stay out of the browser's offline cache. Timestamped database snapshots support recovery to an earlier saved state.
-
-[Client scoring and evidence](docs/architecture/client-intelligence.md) · [Business intelligence and financial measures](docs/architecture/business-intelligence.md)
 
 Copyright © 2026 KC. All rights reserved. [Proprietary license](LICENSE)
