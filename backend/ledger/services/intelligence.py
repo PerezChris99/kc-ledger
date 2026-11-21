@@ -260,30 +260,81 @@ def refresh_intelligence():
     )
     signals, samples, invoice_summary = _counts_by_client(clients)
     analyses = {}
+    ids = [client.id for client in clients]
+    existing_profiles = {
+        row.client_id: row
+        for row in ClientIntelligenceProfile.objects.filter(client_id__in=ids)
+    }
+    today = timezone.localdate()
+    existing_observations = {
+        row.client_id: row
+        for row in ClientIntelligenceObservation.objects.filter(
+            client_id__in=ids, observed_on=today
+        )
+    }
+    new_profiles, changed_profiles = [], []
+    new_observations, changed_observations = [], []
+    assessed_at = timezone.now()
     for client in clients:
         counts = {k: int(v) for k, v in signals[client.id].items() if v > 0}
         metrics = _make_summary(
             client, counts, invoice_summary.get(client.id, {}), samples[client.id]
         )
         analyses[client.id] = {"signals": counts, "metrics": metrics}
-        defaults = {
+        values = {
             "signals": counts,
             "metrics": metrics,
             "sample_size": samples[client.id],
             "score_snapshot": client.score,
         }
-        prior = ClientIntelligenceProfile.objects.filter(client=client).first()
-        if prior is None or any(getattr(prior, key) != value for key, value in defaults.items()):
-            ClientIntelligenceProfile.objects.update_or_create(client=client, defaults=defaults)
-        ClientIntelligenceObservation.objects.update_or_create(
-            client=client,
-            observed_on=timezone.localdate(),
-            defaults={
-                "score": client.score,
-                "risk_index": metrics["risk_index"],
-                "evidence_count": samples[client.id],
-            },
+        prior = existing_profiles.get(client.id)
+        if prior is None:
+            new_profiles.append(ClientIntelligenceProfile(client_id=client.id, **values))
+        elif any(getattr(prior, key) != value for key, value in values.items()):
+            for key, value in values.items():
+                setattr(prior, key, value)
+            prior.assessed_at = assessed_at
+            changed_profiles.append(prior)
+        previous_observation = existing_observations.get(client.id)
+        record_values = {
+            "score": client.score,
+            "risk_index": metrics["risk_index"],
+            "evidence_count": samples[client.id],
+        }
+        if previous_observation is None:
+            new_observations.append(ClientIntelligenceObservation(
+                client_id=client.id, observed_on=today, **record_values
+            ))
+        elif any(
+            getattr(previous_observation, field) != value
+            for field, value in record_values.items()
+        ):
+            for field, value in record_values.items():
+                setattr(previous_observation, field, value)
+            changed_observations.append(previous_observation)
+
+    if new_profiles:
+        ClientIntelligenceProfile.objects.bulk_create(
+            new_profiles, ignore_conflicts=True, batch_size=200
         )
+    if changed_profiles:
+        ClientIntelligenceProfile.objects.bulk_update(
+            changed_profiles,
+            ["signals", "metrics", "sample_size", "score_snapshot", "assessed_at"],
+            batch_size=200,
+        )
+    if new_observations:
+        ClientIntelligenceObservation.objects.bulk_create(
+            new_observations, ignore_conflicts=True, batch_size=200
+        )
+    if changed_observations:
+        ClientIntelligenceObservation.objects.bulk_update(
+            changed_observations, ["score", "risk_index", "evidence_count"], batch_size=200
+        )
+    existing_alerts = {
+        (row.client_id, row.reference_client_id): row
+        for row in ClientPatternAlert.objects.filter(client_id__in=ids)
+    }
 
     for i, current in enumerate(clients):
         # Retired clients remain valuable historical evidence, but must not
@@ -312,29 +363,39 @@ def refresh_intelligence():
             fingerprint = sha256(
                 ("|".join(sorted(entry["kind"] for entry in overlap))).encode("ascii")
             ).hexdigest()
-            existing = ClientPatternAlert.objects.filter(
-                client=current, reference_client=previous
-            ).first()
+            existing = existing_alerts.get((current.id, previous.id))
             state = ClientPatternAlert.Status.OPEN
             if existing and existing.signature == fingerprint:
                 state = existing.status
                 if state == ClientPatternAlert.Status.RESOLVED:
                     state = ClientPatternAlert.Status.OPEN
-            ClientPatternAlert.objects.update_or_create(
-                client=current,
-                reference_client=previous,
-                defaults={
-                    "signature": fingerprint,
-                    "overlap": overlap,
-                    "similarity": similarity,
-                    "status": state,
-                },
+            values = {
+                "signature": fingerprint,
+                "overlap": overlap,
+                "similarity": similarity,
+                "status": state,
+            }
+            if existing is None:
+                entry, _ = ClientPatternAlert.objects.update_or_create(
+                    client=current, reference_client=previous, defaults=values
+                )
+                existing_alerts[(current.id, previous.id)] = entry
+            elif any(getattr(existing, key) != value for key, value in values.items()):
+                for key, value in values.items():
+                    setattr(existing, key, value)
+                existing.save(update_fields=[*values, "updated_at"])
+        stale_ids = [
+            alert.id for (client_id, reference_id), alert in existing_alerts.items()
+            if client_id == current.id and reference_id not in active_previous_ids
+            and alert.status != ClientPatternAlert.Status.RESOLVED
+        ]
+        if stale_ids:
+            ClientPatternAlert.objects.filter(pk__in=stale_ids).update(
+                status=ClientPatternAlert.Status.RESOLVED, updated_at=assessed_at
             )
-        ClientPatternAlert.objects.filter(client=current).exclude(
-            reference_client_id__in=active_previous_ids
-        ).exclude(status=ClientPatternAlert.Status.RESOLVED).update(
-            status=ClientPatternAlert.Status.RESOLVED
-        )
+            for entry in existing_alerts.values():
+                if entry.id in stale_ids:
+                    entry.status = ClientPatternAlert.Status.RESOLVED
     return analyses
 
 

@@ -242,3 +242,37 @@ def test_grok_metered_calls_are_disabled_by_default(monkeypatch):
     monkeypatch.delenv("LEDGER_ENABLE_METERED_GROK", raising=False)
     with pytest.raises(AdviceUnavailable):
         provider_config("grok")
+
+
+@pytest.mark.django_db
+def test_archived_client_remains_historical_evidence_but_not_active(owner):
+    historical = Client.objects.create(name="Former client", score=15)
+    adverse_event(historical, "scope_creep")
+    adverse_event(historical, "chargeback")
+    historical.delete()
+    recent = Client.objects.create(name="New inquiry", score=70)
+    adverse_event(recent, "scope_creep")
+    adverse_event(recent, "chargeback")
+
+    reply = owner.get("/api/intelligence/overview")
+    assert reply.status_code == 200
+    assert reply.json()["client_count"] == 1
+    matched = ClientPatternAlert.objects.get(client=recent)
+    assert matched.reference_client_id == historical.id
+
+
+@pytest.mark.django_db
+def test_no_database_writes_when_cached_evidence_is_unchanged():
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    Client.objects.bulk_create([Client(name=f"Client {n}") for n in range(40)])
+    refresh_intelligence()
+    with CaptureQueriesContext(connection) as queries:
+        refresh_intelligence()
+    writes = [
+        row["sql"] for row in queries
+        if row["sql"].strip().upper().startswith(("INSERT ", "UPDATE ", "DELETE "))
+    ]
+    assert not writes
+    assert len(queries) < 20
