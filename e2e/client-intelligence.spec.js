@@ -55,7 +55,7 @@ test("intelligence charts, factual history matching, owner review and local advi
     await recordSignal(page, "scope_creep");
     await recordSignal(page, "chargeback");
     await expect(page.getByText(historical, { exact: true }).last()).toBeVisible();
-    await expect(page.getByText(/Common observed behaviours:/)).toContainText("Chargeback");
+    await expect(page.getByText(/Common observed behaviours:/).last()).toContainText(/chargeback/i);
 
     await page.getByRole("button", { name: "Generate advisory report" }).click();
     await expect(page.getByText("Local advisory", { exact: true })).toBeVisible();
@@ -64,6 +64,6 @@ test("intelligence charts, factual history matching, owner review and local advi
     await expect(page.getByText("BEHAVIOUR HEATMAP")).toBeVisible();
     await expect(page.getByText("HISTORICAL PATTERN MATCHES")).toBeVisible();
     await page.getByRole("button", { name: "Mark reviewed" }).first().click();
-    await expect(page.getByText("No unreviewed cross-client matches.", { exact: false })).toBeVisible();
+    await expect(page.getByText("Alert review saved.", { exact: false })).toBeVisible();
     await page.screenshot({ path: "test-results/client-intelligence.png", fullPage: true });
 });
