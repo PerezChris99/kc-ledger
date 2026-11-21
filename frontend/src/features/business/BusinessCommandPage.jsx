@@ -513,6 +513,26 @@ export default function BusinessCommandPage() {
       {section === "advisor" && <div className="command-two">
         <section className="panel">
           <div className="panel-heading"><span>DECISION CHALLENGES AND WARNINGS</span><span className="panel-period">EVIDENCE FIRST</span></div>
+          <div className="command-ranked-strategies">
+            <strong>Ranked strategy experiments</strong>
+            <p className="settings-note">Ranked by recorded risks, active goals and past observed changes—not invented market predictions.</p>
+            {(data.strategy_paths ?? []).map(path =>
+              <article className="command-finding" key={path.id}>
+                <div className="command-decision-head">
+                  <strong>{path.rank}. {path.strategy}</strong>
+                  <span>Rule priority {path.rank_score}</span>
+                </div>
+                <p><strong>Why:</strong> {path.why}</p>
+                <ol className="intel-guidance">{path.steps.map((step, index) =>
+                  <li key={index}>{step}</li>)}</ol>
+                <p className="settings-note">Reviewed prior attempts: {path.experiments_reviewed};
+                  favorable observations {path.past_favorable_observations},
+                  unfavorable {path.past_unfavorable_observations}.
+                </p>
+                <p className="inline-warning">{path.caution}</p>
+              </article>)}
+          </div>
+          <div className="panel-heading"><span>LIVE WARNING RULES</span><span className="panel-period">{data.recommendations.length} FINDINGS</span></div>
           {data.recommendations.length ? data.recommendations.map(item =>
             <article className="command-finding" key={item.id}>
               <div className="command-decision-head"><strong>{item.title}</strong><span>{item.priority} priority</span></div>

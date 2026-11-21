@@ -31,6 +31,7 @@ from ledger.services.business_intelligence import (
     objective_progress,
     pitch_playbook,
     prioritize_goals_and_decisions,
+    recommend_strategy_paths,
     simulate,
 )
 
@@ -130,6 +131,7 @@ def _portfolio(include_decisions=True):
     result["objectives"] = [objective_progress(row, snapshot) for row in objectives]
     result["decisions"] = [decision_review(row, snapshot) for row in decisions]
     result["recommendations"] = prioritize_goals_and_decisions(snapshot, objectives, decisions)
+    result["strategy_paths"] = recommend_strategy_paths(snapshot, objectives, decisions)
     result["provider_status"] = public_availability()
     result["scope"] = "business-operations"
     result["methodology"] = (

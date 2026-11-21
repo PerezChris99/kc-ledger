@@ -68,6 +68,10 @@ The advisor evaluates recorded data and your stated goals together. Examples:
 
 There is **no autonomous invoicing, pricing change, credit decision, client rejection or spending commitment.** Confidence is limited by the data provided.
 
+## Goal-aware ranked strategy experiments
+
+The local advisor also ranks up to five **possible experiments** using an explainable heuristic: the urgency of actual rule findings, overlap with your active measurable goals, and directional observations from completed past experiments. It can prioritize collections discipline, cost containment, client diversification, price/scope management and data-quality repair. Each recommendation identifies the rules and goals behind it, practical test steps, implementation risk, and whether similar past experiments moved the chosen metric favorably or unfavorably. This is **not a trained optimization model** or proof of cause; it is a disciplined review order that you control.
+
 ## Client pitch guide
 
 `GET /api/intelligence/business/pitch/{client_id}` builds a **safe structured proposal outline** using only internal business signals:

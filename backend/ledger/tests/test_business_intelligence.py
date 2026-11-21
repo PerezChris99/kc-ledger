@@ -431,3 +431,47 @@ def test_scheduled_business_alerts_do_not_invent_risk_on_empty_ledger():
 
     assert emit_business_intelligence_alerts() == 0
     assert not Event.objects.filter(kind__startswith="business_alert_").exists()
+
+
+@pytest.mark.django_db
+def test_strategy_priorities_align_to_goals_and_reject_causal_claims():
+    from ledger.services.business_intelligence import recommend_strategy_paths
+
+    snapshot = build_business_snapshot(base="USD")
+    objective = BusinessObjective.objects.create(
+        name="Grow clients",
+        metric=BusinessObjective.Metric.ACTIVE_CLIENTS,
+        target=Decimal("10"),
+        due_date=timezone.localdate() + timedelta(days=120),
+    )
+    options = recommend_strategy_paths(snapshot, [objective], [])
+    diversify = next(row for row in options if row["id"] == "diversify")
+    assert "active_clients" in diversify["related_goals"]
+    assert diversify["rank_score"] > 0
+    assert "do not prove" in diversify["limitations"]
+
+
+@pytest.mark.django_db
+def test_strategy_ranking_shows_reviewed_unfavorable_outcome_without_false_causality():
+    from ledger.services.business_intelligence import recommend_strategy_paths
+
+    snapshot = build_business_snapshot(base="USD")
+    strategy = BusinessStrategyDecision.objects.create(
+        title="Prior cost cutting",
+        kind="costs",
+        metric="monthly_cash_result",
+        baseline=Decimal("100"),
+        started_on=timezone.localdate() - timedelta(days=30),
+        review_on=timezone.localdate(),
+        status=BusinessStrategyDecision.Status.REVIEWED,
+    )
+    goal = BusinessObjective.objects.create(
+        name="Increase cash",
+        metric="monthly_cash_result",
+        target=Decimal("1000"),
+        due_date=timezone.localdate() + timedelta(days=30),
+    )
+    recommendations = recommend_strategy_paths(snapshot, [goal], [strategy])
+    cost = next(row for row in recommendations if row["id"] == "cost_review")
+    assert cost["past_unfavorable_observations"] == 1
+    assert "caused" in cost["limitations"]

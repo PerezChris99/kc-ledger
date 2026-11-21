@@ -643,6 +643,160 @@ def prioritize_goals_and_decisions(snapshot, objectives, decisions):
     )[:30]
 
 
+
+# Explicit rules and measurable targets drive strategy rankings, never
+# model-generated labels, sensitive attributes or implied market facts.
+STRATEGY_PLAYBOOKS = (
+    {
+        "id": "collections",
+        "name": "Improve collections before extending credit",
+        "signals": {"overdue_exposure", "negative_cash", "invoice_integrity"},
+        "goal_metrics": {"overdue_balance", "monthly_cash_result"},
+        "kind": "collections",
+        "steps": [
+            "Prioritize the oldest unpaid invoices and confirm actual amounts owed.",
+            "Agree dated milestone payments and document client acceptance.",
+            "Review collections over the next completed reporting cycle.",
+        ],
+        "risk": "Aggressive collection can harm relationships; use lawful, respectful terms.",
+    },
+    {
+        "id": "cost_review",
+        "name": "Protect the recorded cash buffer",
+        "signals": {"negative_cash", "cash_cost_pressure", "negative_client_cash"},
+        "goal_metrics": {"monthly_expenses", "monthly_cash_result"},
+        "kind": "costs",
+        "steps": [
+            "Audit the largest recorded expense categories and unassigned overhead.",
+            "Separate essential delivery costs from deferrable spending.",
+            "Monitor the next completed month's net recorded cash, not gross invoice value.",
+        ],
+        "risk": "Cutting delivery capacity blindly can cause churn or rework.",
+    },
+    {
+        "id": "diversify",
+        "name": "Diversify qualified client demand",
+        "signals": {"revenue_concentration"},
+        "goal_metrics": {"active_clients", "monthly_receipts"},
+        "kind": "outreach",
+        "steps": [
+            "Define a clear ideal project outcome and evidence-based service offer.",
+            "Test two small acquisition approaches with documented lead outcomes.",
+            "Track actual conversations and paying clients, not impression counts.",
+        ],
+        "risk": "Acquisition cost and conversion are unknown until a lead pipeline is recorded.",
+    },
+    {
+        "id": "pricing",
+        "name": "Test price and scope discipline",
+        "signals": {"negative_client_cash", "cash_cost_pressure"},
+        "goal_metrics": {"cash_per_hour", "monthly_cash_result", "monthly_receipts"},
+        "kind": "pricing",
+        "steps": [
+            "Review directly assigned costs, logged hours and delivery scope.",
+            "Offer transparent deliverable tiers and signed changes, not vague discounts.",
+            "Measure actual accepted quotes, paid invoices and logged workload.",
+        ],
+        "risk": "Price increases may reduce demand; no demand elasticity is measured.",
+    },
+    {
+        "id": "quality",
+        "name": "Repair the evidence before committing to a strategy",
+        "signals": {
+            "unmeasured_cash", "fx_gaps", "cost_coverage", "invoice_integrity"
+        },
+        "goal_metrics": set(),
+        "kind": "other",
+        "steps": [
+            "Reconcile missing FX, all cash receipts, expense entries and invoice settlements.",
+            "Confirm relevant owner pay, taxes and unassigned overhead are captured.",
+            "Compare the corrected baseline with your defined business goals.",
+        ],
+        "risk": "Incomplete records can reverse the financial recommendation.",
+    },
+)
+
+
+def recommend_strategy_paths(snapshot, objectives, decisions):
+    """Rank plausible *tests* by recorded evidence, goal fit and past outcomes.
+
+    Not an optimizer or a trained model. An experiment that failed before is
+    challenged, not automatically disqualified as the context may have changed.
+    """
+    rule_codes = {row["id"] for row in snapshot["recommendations"]}
+    goal_metrics = {
+        row.metric for row in objectives
+        if row.status == BusinessObjective.Status.ACTIVE
+    }
+    results = []
+    for item in STRATEGY_PLAYBOOKS:
+        signals = sorted(item["signals"] & rule_codes)
+        goals = sorted(item["goal_metrics"] & goal_metrics)
+        if not signals and not goals:
+            continue
+        history = [
+            row for row in decisions
+            if row.kind == item["kind"]
+            and row.status == BusinessStrategyDecision.Status.REVIEWED
+        ]
+        evaluations = [decision_review(row, snapshot) for row in history]
+        favorable = sum(r["direction_favorable"] is True for r in evaluations)
+        adverse = sum(r["direction_favorable"] is False for r in evaluations)
+        unmeasured = sum(r["direction_favorable"] is None for r in evaluations)
+        evidence_priority = sum(
+            3 if rule["priority"] == "high" else 2
+            for rule in snapshot["recommendations"]
+            if rule["id"] in signals
+        )
+        score = evidence_priority + 2 * len(goals)
+        if adverse:
+            score = max(0, score - min(2, adverse))
+        if favorable:
+            score += 1
+        results.append({
+            "id": item["id"],
+            "strategy": item["name"],
+            "rank_score": score,
+            "why": (
+                "Triggered by " + ", ".join(signals) if signals
+                else "Aligned to an active, owner-defined measurable outcome"
+            ),
+            "related_goals": goals,
+            "rule_evidence": signals,
+            "experiments_reviewed": len(history),
+            "past_favorable_observations": favorable,
+            "past_unfavorable_observations": adverse,
+            "past_unmeasured_observations": unmeasured,
+            "steps": item["steps"],
+            "caution": item["risk"],
+            "limitations": (
+                "Ranking is heuristic and evidence-driven. Historical directional "
+                "changes do not prove a strategy caused the result."
+            ),
+        })
+    if not results:
+        results.append({
+            "id": "baseline",
+            "strategy": "Build a measurable baseline before changing direction",
+            "rank_score": 0,
+            "why": "No specific current risk or measurable goal triggered a strategy.",
+            "related_goals": [],
+            "rule_evidence": [],
+            "experiments_reviewed": 0,
+            "past_favorable_observations": 0,
+            "past_unfavorable_observations": 0,
+            "past_unmeasured_observations": 0,
+            "steps": [
+                "Record complete cash transactions and attributable work hours.",
+                "Define one measurable goal and a review deadline.",
+                "Run one reversible change and compare the observed outcome.",
+            ],
+            "caution": "A generic plan is not a prediction of improved profitability.",
+            "limitations": "Insufficient objective evidence for a ranked strategy.",
+        })
+    results.sort(key=lambda row: (-row["rank_score"], row["id"]))
+    return [{**row, "rank": index + 1} for index, row in enumerate(results[:5])]
+
 def simulate(snapshot, pricing_pct=0, collection_pct=0, expenses_pct=0):
     """No claim of elasticity. Hypothetical lever changes, not projected sales."""
     baseline = snapshot["forecast"]
