@@ -289,7 +289,7 @@ def test_historical_strategy_never_invents_baseline(owner):
     )
     assert res.status_code == 200
     assert res.json()["baseline"] is None
-    assert "not fabricated" in res.json()["note"]
+    assert "rather than fabricated" in res.json()["note"]
 
 
 @pytest.mark.django_db
