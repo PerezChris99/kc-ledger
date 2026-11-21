@@ -65,3 +65,5 @@ App installation is separate from the signed Windows executable update path. The
 - **Offline-only browser use:** intentionally limited to static shell. Full offline editing requires a separate encrypted, conflict-resolved local datastore and explicit reconciliation protocol; not safe to pretend it is implemented for a financial ledger.
 
 See [Vercel + Prisma PostgreSQL runbook](31-pwa-vercel-prisma.md) and [deployment gates](26-updates-and-deployment.md).
+
+After a connectivity interruption, KC Ledger keeps the private workspace hidden until the server verifies the session. An expired session returns to owner sign-in.

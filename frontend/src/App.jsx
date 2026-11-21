@@ -71,20 +71,39 @@ export default function App() {
     const [search, setSearch] = useState("");
     const [moreOpen, setMoreOpen] = useState(false);
     const [online, setOnline] = useState(() => navigator.onLine !== false || isLoopbackOrigin());
+    const [reconnecting, setReconnecting] = useState(false);
     const queryClient = useQueryClient();
     const [signOutWarning, setSignOutWarning] = useState("");
-    const session = useQuery({ queryKey: ["session"], queryFn: () => api("/api/session"), retry: false });
+    const session = useQuery({
+        queryKey: ["session"], queryFn: () => api("/api/session"), retry: false, networkMode: "always",
+    });
     const preferences = useQuery({ queryKey: ["settings"], queryFn: () => api("/api/settings"), enabled: Boolean(session.data?.authenticated) });
     useEffect(() => { const handler = (event) => { const target = event.detail; if (typeof target === "string")
         setActive(target); }; window.addEventListener("kc-ledger:navigate", handler); return () => window.removeEventListener("kc-ledger:navigate", handler); }, []);
     useEffect(() => {
-        const connected = () => {
+        let connectionAttempt = 0;
+        const connected = async () => {
+            const attempt = ++connectionAttempt;
+            setReconnecting(true);
             setOnline(true);
-            // Refresh session and active ledger queries; do not present stale
-            // in-memory financial values as server-authoritative after reconnect.
-            void queryClient.invalidateQueries();
+            const verified = await queryClient.fetchQuery({
+                queryKey: ["session"],
+                queryFn: () => api("/api/session"),
+                retry: false,
+                networkMode: "always",
+                staleTime: 0,
+            }).catch(() => null);
+            if (attempt !== connectionAttempt) return;
+            setReconnecting(false);
+            if (verified?.authenticated) {
+                void queryClient.invalidateQueries({
+                    predicate: query => query.queryKey[0] !== "session"
+                });
+            }
         };
         const disconnected = () => {
+            const attempt = ++connectionAttempt;
+            setReconnecting(false);
             if (!isLoopbackOrigin()) {
                 setOnline(false);
                 return;
@@ -93,13 +112,18 @@ export default function App() {
             // whether this computer's local Docker/PostgreSQL app is running.
             // Probe loopback before hiding a fully functional local ledger.
             void fetch("/api/health", { cache: "no-store", credentials: "include" })
-                .then(response => setOnline(response.ok))
-                .catch(() => setOnline(false));
+                .then(response => {
+                    if (attempt === connectionAttempt) setOnline(response.ok);
+                })
+                .catch(() => {
+                    if (attempt === connectionAttempt) setOnline(false);
+                });
         };
         if (navigator.onLine === false && isLoopbackOrigin()) disconnected();
         window.addEventListener("online", connected);
         window.addEventListener("offline", disconnected);
         return () => {
+            connectionAttempt++;
             window.removeEventListener("online", connected);
             window.removeEventListener("offline", disconnected);
         };
@@ -172,9 +196,9 @@ export default function App() {
             <button className="small-button" type="button" onClick={() => window.location.reload()}>Retry connection</button>
           </div>
         </main>;
-    if (session.isLoading)
+    if (session.isLoading || reconnecting)
         return <main className="boot-screen"><span className="wordmark-symbol">KC</span><p className="eyebrow">VERIFYING PRIVATE SESSION</p></main>;
-    if (!session.data?.authenticated)
+    if (session.isError || !session.data?.authenticated)
         return <>{signOutWarning && <div role="alert" className="pwa-logout-warning">
             {signOutWarning}</div>}
           <LoginPage unavailable={Boolean(session.error)}
