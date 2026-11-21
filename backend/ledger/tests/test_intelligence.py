@@ -28,8 +28,12 @@ def owner(client):
 
 def adverse_event(client, code):
     return Event.objects.create(
-        client=client, kind=code, category=Event.Category.BEHAVIOUR,
-        polarity=-1, title=code.replace("_", " "), occurred_at=timezone.now(),
+        client=client,
+        kind=code,
+        category=Event.Category.BEHAVIOUR,
+        polarity=-1,
+        title=code.replace("_", " "),
+        occurred_at=timezone.now(),
     )
 
 
@@ -65,9 +69,7 @@ def test_same_behaviour_patterns_flag_new_client_with_recorded_evidence(owner):
     assert len(alerts) == 1
     assert alerts[0]["reference_client_id"] == prior.id
     assert alerts[0]["similarity"] >= 55
-    assert {x["kind"] for x in alerts[0]["shared_signals"]} == {
-        "scope_creep", "payment_late"
-    }
+    assert {x["kind"] for x in alerts[0]["shared_signals"]} == {"scope_creep", "payment_late"}
     assert alerts[0]["status"] == "open"
     assert details.json()["analysis"]["risk_index"] > 0
 
@@ -99,11 +101,14 @@ def test_recorded_signal_is_immutable_and_refreshes_score(owner):
     summary = response.json()["analysis"]
     assert any(x["kind"] == "abusive" for x in summary["adverse_signals"])
     assert summary["evidence_confidence"] == "insufficient"
-    assert owner.post(
-        f"/api/intelligence/clients/{client.id}/signals",
-        data={"code": "nonexistent-psychology", "detail": "guess"},
-        content_type="application/json",
-    ).status_code == 422
+    assert (
+        owner.post(
+            f"/api/intelligence/clients/{client.id}/signals",
+            data={"code": "nonexistent-psychology", "detail": "guess"},
+            content_type="application/json",
+        ).status_code
+        == 422
+    )
     assert Event.objects.filter(client=client, kind="nonexistent-psychology").count() == 0
 
 
@@ -159,7 +164,9 @@ def test_external_provider_requires_explicit_per_request_consent(owner):
 
 @pytest.mark.django_db
 def test_only_anonymized_evidence_is_sent_and_advice_is_separate(owner):
-    prior = Client.objects.create(name="Prior secret", email="hidden@example.test", notes="Very private")
+    prior = Client.objects.create(
+        name="Prior secret", email="hidden@example.test", notes="Very private"
+    )
     current = Client.objects.create(
         name="New confidential", email="private@example.test", notes="Do not share"
     )
@@ -170,15 +177,18 @@ def test_only_anonymized_evidence_is_sent_and_advice_is_separate(owner):
     def model(provider, payload):
         evidence.update(payload)
         return "gemini-2.5-flash-lite", {
-            "summary": "Use a written scope", "actions": ["Agree milestones"],
-            "avoid": [], "uncertainty": "Sparse evidence",
+            "summary": "Use a written scope",
+            "actions": ["Agree milestones"],
+            "avoid": [],
+            "uncertainty": "Sparse evidence",
         }
 
     with patch("ledger.intelligence_api.request_advice", side_effect=model):
         response = owner.post(
             "/api/intelligence/advice",
             data={
-                "client_id": current.id, "provider": "gemini",
+                "client_id": current.id,
+                "provider": "gemini",
                 "share_anonymized": True,
             },
             content_type="application/json",
@@ -200,10 +210,13 @@ def test_objective_overdue_invoice_is_counted(owner):
 
     c = Client.objects.create(name="Debtor")
     Invoice.objects.create(
-        client=c, number="D-001", title="Services",
+        client=c,
+        number="D-001",
+        title="Services",
         issue_date=timezone.localdate() - timedelta(days=30),
         due_date=timezone.localdate() - timedelta(days=2),
-        amount="100.00", status=Invoice.Status.SENT,
+        amount="100.00",
+        status=Invoice.Status.SENT,
     )
     detail = owner.get(f"/api/intelligence/clients/{c.id}")
     assert detail.status_code == 200

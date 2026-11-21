@@ -4,7 +4,6 @@ from decimal import Decimal
 
 from django.db import migrations
 
-
 SIGNALS = [
     ("late_feedback", "Slow feedback / approval", "comms", -1, 1),
     ("missed_meeting", "Missed scheduled meeting", "comms", -1, 1),
@@ -27,8 +26,11 @@ def add_signals(apps, schema_editor):
         types.objects.update_or_create(
             kind=kind,
             defaults={
-                "label": label, "category": category, "polarity": polarity,
-                "weight": Decimal(weight), "icon": "",
+                "label": label,
+                "category": category,
+                "polarity": polarity,
+                "weight": Decimal(weight),
+                "icon": "",
             },
         )
 

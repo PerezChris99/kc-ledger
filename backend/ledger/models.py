@@ -425,9 +425,7 @@ class ClientPatternAlert(models.Model):
         DISMISSED = "dismissed", "Dismissed"
         RESOLVED = "resolved", "Resolved"
 
-    client = models.ForeignKey(
-        Client, on_delete=models.CASCADE, related_name="pattern_alerts"
-    )
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="pattern_alerts")
     reference_client = models.ForeignKey(
         Client, on_delete=models.CASCADE, related_name="historical_matches"
     )
@@ -476,9 +474,7 @@ class ClientIntelligenceObservation(models.Model):
 class ClientAdvisoryReport(models.Model):
     """Owner-requested advisory only; models cannot modify source financial facts."""
 
-    client = models.ForeignKey(
-        Client, on_delete=models.CASCADE, related_name="advisory_reports"
-    )
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="advisory_reports")
     provider = models.CharField(max_length=16)
     model_name = models.CharField(max_length=100, blank=True)
     advice = models.JSONField(default=dict)

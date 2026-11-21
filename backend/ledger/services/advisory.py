@@ -73,13 +73,15 @@ def _parse_response(text):
     result = {
         "summary": body["summary"].strip()[:1200],
         "actions": [
-            x.strip()[:300] for x in body.get("actions", [])
-            if isinstance(x, str) and x.strip()
-        ][:8] if isinstance(body.get("actions"), list) else [],
+            x.strip()[:300] for x in body.get("actions", []) if isinstance(x, str) and x.strip()
+        ][:8]
+        if isinstance(body.get("actions"), list)
+        else [],
         "avoid": [
-            x.strip()[:300] for x in body.get("avoid", [])
-            if isinstance(x, str) and x.strip()
-        ][:8] if isinstance(body.get("avoid"), list) else [],
+            x.strip()[:300] for x in body.get("avoid", []) if isinstance(x, str) and x.strip()
+        ][:8]
+        if isinstance(body.get("avoid"), list)
+        else [],
         "uncertainty": str(body.get("uncertainty", "Model advice is unverified.")).strip()[:500],
     }
     if not result["summary"]:
@@ -102,8 +104,12 @@ def _post_json(url, headers, body):
             return json.loads(raw)
     except HTTPError as exc:
         if exc.code == 429:
-            raise AdviceUnavailable("Provider request quota reached. Local intelligence still works.") from None
-        raise AdviceUnavailable("Provider rejected the request. Verify its configured API access.") from None
+            raise AdviceUnavailable(
+                "Provider request quota reached. Local intelligence still works."
+            ) from None
+        raise AdviceUnavailable(
+            "Provider rejected the request. Verify its configured API access."
+        ) from None
     except (URLError, TimeoutError, OSError, ValueError) as exc:
         logger.info("External advice request failed (%s)", type(exc).__name__)
         raise AdviceUnavailable("Optional AI provider is temporarily unavailable") from None
@@ -138,7 +144,10 @@ def request_advice(provider, features):
             {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": "Give concise evidence-based business advice as JSON."},
+                    {
+                        "role": "system",
+                        "content": "Give concise evidence-based business advice as JSON.",
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.2,
@@ -156,7 +165,8 @@ def public_availability():
     enabled = os.environ.get("LEDGER_AI_ADVICE_ENABLED") == "1"
     return {
         "gemini": enabled and bool(os.environ.get("GEMINI_API_KEY", "").strip()),
-        "grok": enabled and bool(os.environ.get("XAI_API_KEY", "").strip())
+        "grok": enabled
+        and bool(os.environ.get("XAI_API_KEY", "").strip())
         and os.environ.get("LEDGER_ENABLE_METERED_GROK") == "1",
         "external_opt_in_required": True,
         "grok_is_metered": True,

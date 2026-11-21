@@ -22,7 +22,8 @@ class Migration(migrations.Migration):
                     "client",
                     models.OneToOneField(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="intelligence_profile", to="ledger.client"
+                        related_name="intelligence_profile",
+                        to="ledger.client",
                     ),
                 ),
             ],
@@ -35,11 +36,17 @@ class Migration(migrations.Migration):
                 ("overlap", models.JSONField(default=list)),
                 ("similarity", models.PositiveSmallIntegerField(default=0)),
                 (
-                    "status", models.CharField(
-                        max_length=12, default="open",
-                        choices=[("open", "Open"), ("reviewed", "Reviewed"),
-                                 ("dismissed", "Dismissed"), ("resolved", "Resolved")]
-                    )
+                    "status",
+                    models.CharField(
+                        max_length=12,
+                        default="open",
+                        choices=[
+                            ("open", "Open"),
+                            ("reviewed", "Reviewed"),
+                            ("dismissed", "Dismissed"),
+                            ("resolved", "Resolved"),
+                        ],
+                    ),
                 ),
                 ("review_note", models.TextField(blank=True)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
@@ -48,14 +55,16 @@ class Migration(migrations.Migration):
                     "client",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="pattern_alerts", to="ledger.client"
+                        related_name="pattern_alerts",
+                        to="ledger.client",
                     ),
                 ),
                 (
                     "reference_client",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="historical_matches", to="ledger.client"
+                        related_name="historical_matches",
+                        to="ledger.client",
                     ),
                 ),
             ],
@@ -69,7 +78,7 @@ class Migration(migrations.Migration):
                     ),
                     models.CheckConstraint(
                         condition=Q(similarity__gte=0, similarity__lte=100),
-                        name="pattern_similarity_0_100"
+                        name="pattern_similarity_0_100",
                     ),
                 ],
             },
@@ -86,7 +95,8 @@ class Migration(migrations.Migration):
                     "client",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="intelligence_history", to="ledger.client"
+                        related_name="intelligence_history",
+                        to="ledger.client",
                     ),
                 ),
             ],
@@ -113,7 +123,8 @@ class Migration(migrations.Migration):
                     "client",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="advisory_reports", to="ledger.client"
+                        related_name="advisory_reports",
+                        to="ledger.client",
                     ),
                 ),
             ],

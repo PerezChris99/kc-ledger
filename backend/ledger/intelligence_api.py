@@ -1,10 +1,10 @@
 """Owner-only intelligence and optional, explicitly consented model advice."""
 
+import json
 from collections import Counter
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from hashlib import sha256
-import json
 
 from django.db import transaction
 from django.db.models import Avg, Count
@@ -94,14 +94,15 @@ def signal_types(request):
             continue
         rows.append(
             {
-                "code": code, "label": label, "severity": severity,
-                "category": "warning", "recommended_action": recommendation,
+                "code": code,
+                "label": label,
+                "severity": severity,
+                "category": "warning",
+                "recommended_action": recommendation,
             }
         )
     for code, label in POSITIVE_SIGNALS.items():
-        rows.append(
-            {"code": code, "label": label, "severity": 0, "category": "positive"}
-        )
+        rows.append({"code": code, "label": label, "severity": 0, "category": "positive"})
     return {"items": rows}
 
 
@@ -111,8 +112,7 @@ def overview(request):
     # financial records or the user's judgments about individual clients.
     analyses = refresh_intelligence()
     clients = list(
-        Client.objects.only("id", "name", "status", "score", "created_at")
-        .order_by("name", "id")
+        Client.objects.only("id", "name", "status", "score", "created_at").order_by("name", "id")
     )
     alerts = list(
         ClientPatternAlert.objects.filter(client_id__in=[c.id for c in clients])
@@ -131,14 +131,22 @@ def overview(request):
         for entry in data["adverse_signals"]:
             behavior_frequency[entry["kind"]] += entry["count"]
         bucket = (
-            "85–100" if client.score >= 85 else "70–84" if client.score >= 70
-            else "55–69" if client.score >= 55 else "40–54" if client.score >= 40
+            "85–100"
+            if client.score >= 85
+            else "70–84"
+            if client.score >= 70
+            else "55–69"
+            if client.score >= 55
+            else "40–54"
+            if client.score >= 40
             else "0–39"
         )
         buckets[bucket] += 1
         risk_bands[
-            "High review" if data["risk_index"] >= 65
-            else "Watch" if data["risk_index"] >= 35
+            "High review"
+            if data["risk_index"] >= 65
+            else "Watch"
+            if data["risk_index"] >= 35
             else "Low evidence / low concern"
         ] += 1
         items.append(
@@ -185,8 +193,13 @@ def overview(request):
             for key, count in behavior_frequency.most_common(15)
         ],
         "score_risk": [
-            {"id": row["id"], "name": row["name"], "score": row["score"],
-             "risk": row["risk_index"], "evidence": row["evidence_count"]}
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "score": row["score"],
+                "risk": row["risk_index"],
+                "evidence": row["evidence_count"],
+            }
             for row in items
         ],
         "behavior_matrix": {
@@ -196,7 +209,8 @@ def overview(request):
             ],
             "rows": [
                 {
-                    "id": row["id"], "name": row["name"],
+                    "id": row["id"],
+                    "name": row["name"],
                     "counts": [
                         analyses[row["id"]]["signals"].get(code, 0)
                         for code, _ in behavior_frequency.most_common(10)
@@ -208,10 +222,12 @@ def overview(request):
             ],
         },
         "trend": [
-            {"day": row["observed_on"].isoformat(),
-             "avg_score": round(row["avg_score"], 1),
-             "avg_risk": round(row["avg_risk"], 1),
-             "clients": row["count"]}
+            {
+                "day": row["observed_on"].isoformat(),
+                "avg_score": round(row["avg_score"], 1),
+                "avg_risk": round(row["avg_risk"], 1),
+                "clients": row["count"],
+            }
             for row in trend
         ],
         "alerts": [_alert_dict(alert) for alert in alerts[:60]],
@@ -235,9 +251,7 @@ def intelligence_detail(request, client_id: int):
         .order_by("-observed_on")[:90]
         .values("observed_on", "score", "risk_index", "evidence_count")
     )
-    reports = list(
-        ClientAdvisoryReport.objects.filter(client=client).order_by("-created_at")[:20]
-    )
+    reports = list(ClientAdvisoryReport.objects.filter(client=client).order_by("-created_at")[:20])
     return {
         "id": client.id,
         "name": client.name,
@@ -247,15 +261,20 @@ def intelligence_detail(request, client_id: int):
         "recommendation": summary,
         "alerts": [_alert_dict(alert) for alert in alerts],
         "history": [
-            {"date": row["observed_on"].isoformat(),
-             "score": row["score"], "risk_index": row["risk_index"],
-             "evidence_count": row["evidence_count"]}
+            {
+                "date": row["observed_on"].isoformat(),
+                "score": row["score"],
+                "risk_index": row["risk_index"],
+                "evidence_count": row["evidence_count"],
+            }
             for row in reversed(history)
         ],
         "advisories": [
             {
-                "id": report.id, "provider": report.provider,
-                "model": report.model_name, "advice": report.advice,
+                "id": report.id,
+                "provider": report.provider,
+                "model": report.model_name,
+                "advice": report.advice,
                 "created_at": report.created_at.isoformat(),
             }
             for report in reports
@@ -275,16 +294,18 @@ def record_signal(request, client_id: int, payload: SignalIn):
     if len(note) > 800:
         raise HttpError(422, "Evidence note cannot exceed 800 characters.")
     occurred_on = payload.occurred_on or timezone.localdate()
-    if occurred_on > timezone.localdate() or occurred_on < timezone.localdate() - timedelta(days=3650):
+    if occurred_on > timezone.localdate() or occurred_on < timezone.localdate() - timedelta(
+        days=3650
+    ):
         raise HttpError(422, "Signal dates must be within the last ten years.")
     if payload.code in NEGATIVE_SIGNALS:
         label, weight, _ = NEGATIVE_SIGNALS[payload.code]
         polarity = -1
         category = (
-            Event.Category.MONEY if payload.code in {"payment_late", "chargeback"}
-            else Event.Category.COMMS if payload.code in {
-                "abusive", "late_feedback", "missed_meeting", "ghosting_detected"
-            }
+            Event.Category.MONEY
+            if payload.code in {"payment_late", "chargeback"}
+            else Event.Category.COMMS
+            if payload.code in {"abusive", "late_feedback", "missed_meeting", "ghosting_detected"}
             else Event.Category.BEHAVIOUR
         )
     else:
@@ -292,9 +313,12 @@ def record_signal(request, client_id: int, payload: SignalIn):
         polarity, category = 1, Event.Category.RELATIONSHIP
     Event.objects.create(
         client=client,
-        kind=payload.code, category=category,
-        polarity=polarity, weight=Decimal(weight),
-        title=label, detail=note,
+        kind=payload.code,
+        category=category,
+        polarity=polarity,
+        weight=Decimal(weight),
+        title=label,
+        detail=note,
         occurred_at=timezone.make_aware(datetime.combine(occurred_on, time(12, 0))),
     )
     from ledger.api import _refresh_score
@@ -304,10 +328,12 @@ def record_signal(request, client_id: int, payload: SignalIn):
     # on more than one client. This does not change other clients' health scores.
     analyses = refresh_intelligence()
     return {
-        "id": client.id, "score": result.score,
+        "id": client.id,
+        "score": result.score,
         "analysis": analyses[client.id]["metrics"],
         "alerts": [
-            _alert_dict(alert) for alert in _alerts_for_client(client)
+            _alert_dict(alert)
+            for alert in _alerts_for_client(client)
             if alert.status == ClientPatternAlert.Status.OPEN
         ],
     }
@@ -354,14 +380,16 @@ def request_client_advice(request, payload: AdviceIn):
 
     if not payload.share_anonymized:
         raise HttpError(422, "Explicit approval is required to share anonymized indicators.")
-    if ClientAdvisoryReport.objects.filter(
-        provider__in=["gemini", "grok"],
-        created_at__gte=timezone.now() - timedelta(minutes=1),
-    ).count() >= 3:
+    if (
+        ClientAdvisoryReport.objects.filter(
+            provider__in=["gemini", "grok"],
+            created_at__gte=timezone.now() - timedelta(minutes=1),
+        ).count()
+        >= 3
+    ):
         raise HttpError(429, "Too many model requests. Try again later.")
     alerts = [
-        a for a in _alerts_for_client(client)
-        if a.status != ClientPatternAlert.Status.RESOLVED
+        a for a in _alerts_for_client(client) if a.status != ClientPatternAlert.Status.RESOLVED
     ]
     evidence = evidence_for_provider(analyses, client.id, alerts)
     try:
@@ -371,8 +399,11 @@ def request_client_advice(request, payload: AdviceIn):
 
     signature = sha256(json.dumps(evidence, sort_keys=True).encode("utf-8")).hexdigest()
     ClientAdvisoryReport.objects.create(
-        client=client, provider=payload.provider, model_name=model_name,
-        evidence_signature=signature, advice=advice,
+        client=client,
+        provider=payload.provider,
+        model_name=model_name,
+        evidence_signature=signature,
+        advice=advice,
     )
     return {
         "provider": payload.provider,

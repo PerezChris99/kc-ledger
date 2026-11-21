@@ -451,6 +451,6 @@ def test_low_score_warns_without_automatically_blocking_owner_invoice(staff_clie
     assert response.status_code == 200
     assert Invoice.objects.filter(number="REVIEW-001").exists()
     # Advisory scores do not make autonomous account decisions.
-    assert response.json()["risk_warning"] is None or "health score" in response.json()[
-        "risk_warning"
-    ]
+    assert (
+        response.json()["risk_warning"] is None or "health score" in response.json()["risk_warning"]
+    )

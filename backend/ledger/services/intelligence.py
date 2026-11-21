@@ -6,7 +6,6 @@ only explicit event categories and objective ledger/payment history.
 """
 
 from collections import Counter, defaultdict
-from datetime import timedelta
 from hashlib import sha256
 
 from django.db import transaction
@@ -26,18 +25,66 @@ from ledger.models import (
 # code: (human label, severity, recommendation). Only observable work conduct.
 NEGATIVE_SIGNALS = {
     "payment_late": ("Repeated late payment", 3, "Request a deposit and shorter payment terms."),
-    "scope_creep": ("Unapproved scope increase", 3, "Use a signed change order before doing extra work."),
-    "rate_haggling": ("Repeated rate renegotiation", 1, "Agree rates and the revision policy in writing."),
-    "abusive": ("Abusive communication recorded", 4, "Preserve evidence, set boundaries and consider disengagement."),
-    "chargeback": ("Payment chargeback", 5, "Require cleared funds and document delivery acceptance."),
-    "late_feedback": ("Slow feedback / approval", 1, "Specify feedback windows and escalation contacts."),
-    "missed_meeting": ("Missed scheduled meeting", 1, "Confirm meeting attendance and milestone dates in writing."),
-    "unapproved_revisions": ("Unapproved revisions", 2, "Set revision limits and require written approval."),
-    "missed_deadline": ("Client missed agreed deadline", 2, "Add milestone dependencies and buffer time."),
-    "ghosting_detected": ("Communication gap recorded", 2, "Document follow-up attempts and payment exposure."),
-    "contract_dispute": ("Contract terms disputed", 4, "Stop scope expansion until terms are clarified in writing."),
-    "invoice_overdue": ("Open invoice past due", 3, "Follow up on overdue invoices before accepting new work."),
-    "invoice_disputed": ("Invoice dispute", 3, "Resolve the dispute with documented deliverables and acceptance."),
+    "scope_creep": (
+        "Unapproved scope increase",
+        3,
+        "Use a signed change order before doing extra work.",
+    ),
+    "rate_haggling": (
+        "Repeated rate renegotiation",
+        1,
+        "Agree rates and the revision policy in writing.",
+    ),
+    "abusive": (
+        "Abusive communication recorded",
+        4,
+        "Preserve evidence, set boundaries and consider disengagement.",
+    ),
+    "chargeback": (
+        "Payment chargeback",
+        5,
+        "Require cleared funds and document delivery acceptance.",
+    ),
+    "late_feedback": (
+        "Slow feedback / approval",
+        1,
+        "Specify feedback windows and escalation contacts.",
+    ),
+    "missed_meeting": (
+        "Missed scheduled meeting",
+        1,
+        "Confirm meeting attendance and milestone dates in writing.",
+    ),
+    "unapproved_revisions": (
+        "Unapproved revisions",
+        2,
+        "Set revision limits and require written approval.",
+    ),
+    "missed_deadline": (
+        "Client missed agreed deadline",
+        2,
+        "Add milestone dependencies and buffer time.",
+    ),
+    "ghosting_detected": (
+        "Communication gap recorded",
+        2,
+        "Document follow-up attempts and payment exposure.",
+    ),
+    "contract_dispute": (
+        "Contract terms disputed",
+        4,
+        "Stop scope expansion until terms are clarified in writing.",
+    ),
+    "invoice_overdue": (
+        "Open invoice past due",
+        3,
+        "Follow up on overdue invoices before accepting new work.",
+    ),
+    "invoice_disputed": (
+        "Invoice dispute",
+        3,
+        "Resolve the dispute with documented deliverables and acceptance.",
+    ),
     "invoice_written_off": ("Written-off invoice", 4, "Avoid extending further unsecured credit."),
 }
 POSITIVE_SIGNALS = {
@@ -47,9 +94,7 @@ POSITIVE_SIGNALS = {
     "scope_respected": "Scope and change control respected",
     "repeat_engagement": "Repeat engagement",
 }
-BEHAVIOUR_SIGNAL_CODES = tuple(
-    x for x in NEGATIVE_SIGNALS if not x.startswith("invoice_")
-)
+BEHAVIOUR_SIGNAL_CODES = tuple(x for x in NEGATIVE_SIGNALS if not x.startswith("invoice_"))
 SIGNAL_WEIGHTS = {code: entry[1] for code, entry in NEGATIVE_SIGNALS.items()}
 
 
@@ -105,16 +150,18 @@ def _counts_by_client(clients):
         cid = row["client_id"]
         sample[cid] += row["total"]
         # Do not double count manual and objective evidence of late payments.
-        signal_map[cid]["payment_late"] = max(
-            signal_map[cid]["payment_late"], row["late"]
-        )
+        signal_map[cid]["payment_late"] = max(signal_map[cid]["payment_late"], row["late"])
     return signal_map, sample, invoices
 
 
 def _public_signals(signals):
     return [
-        {"kind": kind, "label": NEGATIVE_SIGNALS[kind][0], "count": int(count),
-         "severity": NEGATIVE_SIGNALS[kind][1]}
+        {
+            "kind": kind,
+            "label": NEGATIVE_SIGNALS[kind][0],
+            "count": int(count),
+            "severity": NEGATIVE_SIGNALS[kind][1],
+        }
         for kind, count in sorted(signals.items())
         if kind in NEGATIVE_SIGNALS and count > 0
     ]
@@ -122,7 +169,8 @@ def _public_signals(signals):
 
 def _risk_index(signals, score):
     severity_points = sum(
-        SIGNAL_WEIGHTS[k] * min(3, int(v)) for k, v in signals.items()
+        SIGNAL_WEIGHTS[k] * min(3, int(v))
+        for k, v in signals.items()
         if k in SIGNAL_WEIGHTS and v > 0
     )
     return min(100, severity_points * 4 + max(0, 60 - int(score)) // 3)
@@ -140,9 +188,7 @@ def _confidence(sample_size):
 
 def _similarity(current, past):
     """Count-aware weighted Jaccard. Two independently observed overlaps required."""
-    overlap = [
-        key for key in NEGATIVE_SIGNALS if current.get(key, 0) > 0 and past.get(key, 0) > 0
-    ]
+    overlap = [key for key in NEGATIVE_SIGNALS if current.get(key, 0) > 0 and past.get(key, 0) > 0]
     if len(overlap) < 2:
         return 0, []
     union = sum(
@@ -157,8 +203,12 @@ def _similarity(current, past):
     if score < 55:
         return 0, []
     return score, [
-        {"kind": key, "label": NEGATIVE_SIGNALS[key][0],
-         "current_count": int(current[key]), "past_count": int(past[key])}
+        {
+            "kind": key,
+            "label": NEGATIVE_SIGNALS[key][0],
+            "current_count": int(current[key]),
+            "past_count": int(past[key]),
+        }
         for key in overlap
     ]
 
@@ -224,9 +274,7 @@ def refresh_intelligence():
         }
         prior = ClientIntelligenceProfile.objects.filter(client=client).first()
         if prior is None or any(getattr(prior, key) != value for key, value in defaults.items()):
-            ClientIntelligenceProfile.objects.update_or_create(
-                client=client, defaults=defaults
-            )
+            ClientIntelligenceProfile.objects.update_or_create(client=client, defaults=defaults)
         ClientIntelligenceObservation.objects.update_or_create(
             client=client,
             observed_on=timezone.localdate(),
@@ -254,9 +302,7 @@ def refresh_intelligence():
                     and previous.status != Client.Status.BLACKLISTED
                 ):
                     continue
-                similarity, overlap = _similarity(
-                    current_info["signals"], previous_info["signals"]
-                )
+                similarity, overlap = _similarity(current_info["signals"], previous_info["signals"])
                 if similarity:
                     matches.append((previous, similarity, overlap))
         matches.sort(key=lambda item: (-item[1], item[0].id))
@@ -322,28 +368,33 @@ def evidence_for_provider(analyses, client_id, alerts):
     return {
         "client_reference": "selected-client",
         "score": next(
-            (row.score_snapshot for row in ClientIntelligenceProfile.objects.filter(
-                client_id=client_id
-            )), 50
+            (
+                row.score_snapshot
+                for row in ClientIntelligenceProfile.objects.filter(client_id=client_id)
+            ),
+            50,
         ),
         "risk_index": details["risk_index"],
         "evidence_confidence": details["evidence_confidence"],
         "sample_size": details["observations"],
-        "behaviors": [
-            {"code": x["kind"], "count": x["count"]} for x in details["adverse_signals"]
-        ],
+        "behaviors": [{"code": x["kind"], "count": x["count"]} for x in details["adverse_signals"]],
         "positives": [
             {"code": x["kind"], "count": x["count"]} for x in details["positive_signals"]
         ],
         "invoice_summary": {
-            key: details[key] for key in (
-                "invoice_count", "overdue_invoices",
-                "disputed_invoices", "written_off_invoices",
+            key: details[key]
+            for key in (
+                "invoice_count",
+                "overdue_invoices",
+                "disputed_invoices",
+                "written_off_invoices",
             )
         },
         "similarity_matches": [
-            {"similarity_pct": alert.similarity,
-             "shared_signal_codes": [x["kind"] for x in alert.overlap]}
+            {
+                "similarity_pct": alert.similarity,
+                "shared_signal_codes": [x["kind"] for x in alert.overlap],
+            }
             for alert in alerts[:3]
         ],
     }

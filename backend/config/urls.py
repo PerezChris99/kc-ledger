@@ -6,8 +6,8 @@ from django.contrib import admin
 from django.urls import path, re_path
 from ledger.api import router
 from ledger.api_extra import router as extra_router
-from ledger.intelligence_api import router as intelligence_router
 from ledger.cron_views import daily
+from ledger.intelligence_api import router as intelligence_router
 from ledger.security import staff_session_auth
 from ledger.update_manifest_views import latest
 from ledger.update_views import updates

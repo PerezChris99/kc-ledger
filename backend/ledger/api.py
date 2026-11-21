@@ -659,7 +659,9 @@ def create_invoice(request, payload: InvoiceIn):
     )
     _refresh_score(client)
     return {
-        "id": inv.id, "number": inv.number, "status": inv.status,
+        "id": inv.id,
+        "number": inv.number,
+        "status": inv.status,
         "risk_warning": score_warning,
     }
 
