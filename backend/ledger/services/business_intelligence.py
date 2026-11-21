@@ -269,8 +269,7 @@ def build_business_snapshot(as_of=None, base=None):
 
     clients = list(Client.all_objects.values("id", "name", "status", "score", "deleted_at"))
     active_clients = sum(
-        row["status"] == Client.Status.ACTIVE and row["deleted_at"] is None
-        for row in clients
+        row["status"] == Client.Status.ACTIVE and row["deleted_at"] is None for row in clients
     )
     total_hours = sum(client_hours.values(), ZERO)
     monthly_rows = [

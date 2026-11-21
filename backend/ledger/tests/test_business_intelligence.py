@@ -480,12 +480,10 @@ def test_strategy_ranking_shows_reviewed_unfavorable_outcome_without_false_causa
 @pytest.mark.django_db
 def test_archived_clients_still_account_for_historical_cash_not_current_pitches(paid_client):
     invoiced = invoice(
-        paid_client, 120, timezone.localdate() + timedelta(days=5),
-        number="ARCHIVED-CASH-1"
+        paid_client, 120, timezone.localdate() + timedelta(days=5), number="ARCHIVED-CASH-1"
     )
     Payment.objects.create(
-        client=paid_client, invoice=invoiced,
-        amount=Decimal("120.00"), paid_on=timezone.localdate()
+        client=paid_client, invoice=invoiced, amount=Decimal("120.00"), paid_on=timezone.localdate()
     )
     paid_client.delete()
     report = build_business_snapshot(base="USD")
