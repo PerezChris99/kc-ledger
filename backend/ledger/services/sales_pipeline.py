@@ -54,7 +54,11 @@ def pipeline_overview(today=None):
         stage = opportunity["stage"]
         if stage != BusinessOpportunity.Stage.ARCHIVED:
             counts[stage] += 1
-        pair = sources.setdefault(opportunity["source"], {"won": 0, "lost": 0}) if stage != BusinessOpportunity.Stage.ARCHIVED else None
+        pair = (
+            sources.setdefault(opportunity["source"], {"won": 0, "lost": 0})
+            if stage != BusinessOpportunity.Stage.ARCHIVED
+            else None
+        )
         if stage == BusinessOpportunity.Stage.WON:
             won += 1
             pair["won"] += 1

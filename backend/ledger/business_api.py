@@ -437,10 +437,7 @@ def review_strategy_decision(request, decision_id: int, payload: StrategyReview)
         raise HttpError(422, "Choose reviewed or cancelled.")
     outcome = _safe_text(payload.outcome_note, 1200, "Outcome note")
     try:
-        row = (
-            BusinessStrategyDecision.objects.select_for_update()
-            .get(pk=decision_id)
-        )
+        row = BusinessStrategyDecision.objects.select_for_update().get(pk=decision_id)
     except BusinessStrategyDecision.DoesNotExist as exc:
         raise HttpError(404, "Strategy decision not found.") from exc
     if row.status in {

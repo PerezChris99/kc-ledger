@@ -573,9 +573,7 @@ def test_strategy_review_is_frozen_and_no_change_is_not_a_success(owner, paid_cl
         paid_on + timedelta(days=3),
         number="REVIEW-FROZEN-INVOICE",
     )
-    Payment.objects.create(
-        client=paid_client, invoice=recent, amount=Decimal(130), paid_on=paid_on
-    )
+    Payment.objects.create(client=paid_client, invoice=recent, amount=Decimal(130), paid_on=paid_on)
     live = build_business_snapshot(base="USD")
     shown = decision_review(decision, live)
     assert shown["review_quality"] == "unchanged"
