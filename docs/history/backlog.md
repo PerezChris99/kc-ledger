@@ -34,6 +34,6 @@ This page describes the **current** code after PR #8 (merged 2026-11-15). The 20
 
 **Not blockers unless intentionally restored to scope:** the historical stock-photo carousel and the old dark-first design from the October concept. The current application uses owner login and the KC light-paper theme.
 
-Do not mark any physical-machine gate as passed merely because the source or CI was successful. See [verification matrix](24-verification-matrix.md) and [release runbook](21-production-readiness.md).
+Do not mark any physical-machine gate as passed merely because the source or CI was successful. See [verification matrix](../operations/verification-matrix.md) and [release runbook](../operations/production-readiness.md).
 
 _Updated 2026-11-15._

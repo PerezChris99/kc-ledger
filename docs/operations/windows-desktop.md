@@ -8,7 +8,7 @@ powershell -ExecutionPolicy Bypass -File desktop\build_windows.ps1
 
 The builder verifies JSX frontend lint/Vite, bundles Django/ReportLab/psycopg with PyInstaller, includes WebView2 bootstrapper after Microsoft signature verification, and builds Inno Setup output under `installer-output/`. During packaging and `--self-test`, SQLite is deliberately used in an isolated temporary database so a PostgreSQL service is not a build dependency.
 
-At real launch, `%LOCALAPPDATA%\KCLedger\.env` configures the preferred local PostgreSQL server. In its absence, `auto` mode chooses a **pinned SQLite fallback** on a fresh install, preserving the previous native experience. Already populated SQLite installations are not silently switched. To use PostgreSQL, create the local role/database and configure the values in [database runbook](25-postgresql-and-fallback.md).
+At real launch, `%LOCALAPPDATA%\KCLedger\.env` configures the preferred local PostgreSQL server. In its absence, `auto` mode chooses a **pinned SQLite fallback** on a fresh install, preserving the previous native experience. Already populated SQLite installations are not silently switched. To use PostgreSQL, create the local role/database and configure the values in [database runbook](postgresql-and-fallback.md).
 
 The installer preserves user data across upgrades/uninstall. PostgreSQL mode requires working `pg_dump` and `pg_restore` binaries for safety backups. Use `LEDGER_PG_BIN` to point at the PostgreSQL `bin` directory when they aren't on PATH.
 

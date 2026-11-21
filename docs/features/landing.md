@@ -1,6 +1,6 @@
 # Sign-in and private access
 
-The implemented unauthenticated entry point is a **KC light-themed private owner sign-in**, not a public marketing landing page. The real component is [LoginPage.jsx](../frontend/src/features/auth/LoginPage.jsx), rendered by the authenticated [App.jsx](../frontend/src/App.jsx) flow.
+The implemented unauthenticated entry point is a **KC light-themed private owner sign-in**, not a public marketing landing page. The real component is [LoginPage.jsx](../../frontend/src/features/auth/LoginPage.jsx), rendered by the authenticated [App.jsx](../../frontend/src/App.jsx) flow.
 
 The entry screen includes a private brand message, username/password form, request feedback and a restricted access indication. Django supplies the authenticated session; CSRF protection applies to sign-in and unsafe requests. A first owner is created from configured environment variables in the Docker route or by an on-device setup dialog in the Windows route.
 

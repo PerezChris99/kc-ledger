@@ -20,7 +20,7 @@ An `auto` installation pins its first successful backend in `.ledger-db-backend`
 
 ## PostgreSQL cutover blocked due to old SQLite
 
-The `check_db_transition` command refuses to start a fresh PostgreSQL app if the old SQLite volume contains accounts or financial data. Back up the SQLite file, migrate data offline to PostgreSQL, compare every relevant table and all balances, then explicitly mark migration verified. See [migration runbook](25-postgresql-and-fallback.md).
+The `check_db_transition` command refuses to start a fresh PostgreSQL app if the old SQLite volume contains accounts or financial data. Back up the SQLite file, migrate data offline to PostgreSQL, compare every relevant table and all balances, then explicitly mark migration verified. See [migration runbook](postgresql-and-fallback.md).
 
 ## Backups
 

@@ -37,6 +37,6 @@ Each item above is relative to `/api`. User-friendly financial validation errors
 
 **Rules:** currency fields use three-letter codes; API money uses decimal-precision values. A payment cannot exceed an outstanding invoice or unallocated instalment schedule balance. Paid and partial invoice status is payment-controlled, and a written-off invoice cannot be reopened by simply editing status. Work-hour creation and replacement both reject values with more than two decimal places.
 
-Current implementation is in [backend/ledger/api.py](../backend/ledger/api.py) and [backend/ledger/api_extra.py](../backend/ledger/api_extra.py). Tests are in [backend/ledger/tests](../backend/ledger/tests).
+Current implementation is in [backend/ledger/api.py](../../backend/ledger/api.py) and [backend/ledger/api_extra.py](../../backend/ledger/api_extra.py). Tests are in [backend/ledger/tests](../../backend/ledger/tests).
 
 _Updated 2026-11-15._

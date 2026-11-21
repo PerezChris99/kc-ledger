@@ -11,7 +11,7 @@ The former **dark-first Terminal Ledger** appearance in the original master spec
 | `--kc-paper` | `#F8F9FA` | Background |
 | `--kc-white` | `#FFFFFF` | Raised panels |
 
-Source of truth: [frontend/src/styles/globals.css](../frontend/src/styles/globals.css). The base body font size is 14px. Use consistent tokens for colour, spacing, type, borders and motion; avoid inline hardcoded palette overrides. Prefer restrained transitions and respect `prefers-reduced-motion`. Risk, warning, paid and overdue states should include text, not just colour.
+Source of truth: [frontend/src/styles/globals.css](../../frontend/src/styles/globals.css). The base body font size is 14px. Use consistent tokens for colour, spacing, type, borders and motion; avoid inline hardcoded palette overrides. Prefer restrained transitions and respect `prefers-reduced-motion`. Risk, warning, paid and overdue states should include text, not just colour.
 
 **Acceptance conditions:** inspect dashboard, editing forms, tables, menus and dialogs at desktop and phone widths; test keyboard interaction, focus order, hover, reduced motion, zoom and colour contrast. Lint/build passing is not evidence that all of these were personally verified on physical devices.
 

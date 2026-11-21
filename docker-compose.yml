@@ -58,7 +58,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: frontend.Dockerfile
+      dockerfile: frontend/Dockerfile
       args:
         LEDGER_GIT_SHA: ${GITHUB_SHA:-unknown}
     ports: ["127.0.0.1:8080:80"]
