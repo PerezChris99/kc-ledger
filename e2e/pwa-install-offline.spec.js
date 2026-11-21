@@ -77,3 +77,29 @@ test("local installed PWA can reach loopback backend when the OS reports no inte
     await expect(page.getByLabel("USERNAME")).toBeVisible();
     await expect(page.getByText("OFFLINE MODE")).toHaveCount(0);
 });
+
+test("authenticated API records stay out of service worker caches, and logout clears in-memory financial queries", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel("USERNAME").fill("ledger-ci-owner");
+    await page.getByLabel("PASSWORD").fill("CI-only-Password-123456789-strong");
+    await page.getByRole("button", { name: /Open console/i }).click();
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+    await page.getByRole("navigation", { name: "Main navigation" })
+        .getByRole("button", { name: "Intelligence", exact: true }).click();
+    await expect(page.getByRole("tab", { name: "Business command" })).toBeVisible();
+    const privatePaths = await page.evaluate(async () => {
+        const keys = await caches.keys();
+        const urls = [];
+        for (const name of keys) {
+            const cache = await caches.open(name);
+            for (const request of await cache.keys()) {
+                urls.push(new URL(request.url).pathname);
+            }
+        }
+        return urls.filter(path => /^\/(api|admin|downloads)(\/|$)/.test(path));
+    });
+    expect(privatePaths).toEqual([]);
+    await page.getByRole("button", { name: "Sign out" }).first().click();
+    await expect(page.getByLabel("USERNAME")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+});

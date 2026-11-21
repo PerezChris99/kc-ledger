@@ -257,11 +257,12 @@ def test_strategy_baseline_and_review_do_not_change_finances(owner, paid_client)
     row = BusinessStrategyDecision.objects.get(id=decision_id)
     assert row.baseline == Decimal(0)
     assert row.client_id == paid_client.id
+    # A new decision cannot claim success before a dated owner review.
     assert (
         owner.get("/api/intelligence/business/overview").json()["decisions"][0][
             "direction_favorable"
         ]
-        is True
+        is None
     )
     review = owner.patch(
         f"/api/intelligence/business/decisions/{decision_id}",
@@ -269,6 +270,8 @@ def test_strategy_baseline_and_review_do_not_change_finances(owner, paid_client)
         content_type="application/json",
     )
     assert review.status_code == 200
+    assert review.json()["review_quality"] == "early_review"
+    assert review.json()["review_favorable"] is None
     assert BusinessStrategyDecision.objects.get(id=decision_id).status == "reviewed"
     assert Invoice.objects.count() == 0
 
@@ -464,6 +467,11 @@ def test_strategy_ranking_shows_reviewed_unfavorable_outcome_without_false_causa
         started_on=timezone.localdate() - timedelta(days=30),
         review_on=timezone.localdate(),
         status=BusinessStrategyDecision.Status.REVIEWED,
+        reviewed_at=timezone.now(),
+        review_value=Decimal("0"),
+        review_change=Decimal("-100"),
+        review_favorable=False,
+        review_quality="observed",
     )
     goal = BusinessObjective.objects.create(
         name="Increase cash",
@@ -525,3 +533,221 @@ def test_cash_goals_and_decision_baselines_fail_closed_after_currency_change():
     assert d["currency_mismatch"] is True
     assert d["observed_change"] is None
     assert d["direction_favorable"] is None
+
+
+@pytest.mark.django_db
+def test_strategy_review_is_frozen_and_no_change_is_not_a_success(owner, paid_client):
+    from ledger.services.business_intelligence import decision_review
+
+    decision = BusinessStrategyDecision.objects.create(
+        title="Trial milestone deposits",
+        kind=BusinessStrategyDecision.Kind.COLLECTIONS,
+        metric=BusinessObjective.Metric.MONTHLY_RECEIPTS,
+        baseline=Decimal("0"),
+        currency="USD",
+        started_on=timezone.localdate(),
+        review_on=timezone.localdate(),
+        status=BusinessStrategyDecision.Status.ACTIVE,
+    )
+    endpoint = f"/api/intelligence/business/decisions/{decision.id}"
+    response = owner.patch(
+        endpoint,
+        data={"status": "reviewed", "outcome_note": "No recorded change yet"},
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    assert response.json()["review_quality"] == "unchanged"
+    assert response.json()["review_favorable"] is None
+    decision.refresh_from_db()
+    frozen = (decision.reviewed_at, decision.review_value, decision.review_change)
+    assert frozen[1] == Decimal(0)
+    assert frozen[2] == Decimal(0)
+    assert decision.review_favorable is None
+    # This new payment changes live totals, but may not rewrite the review.
+    recent = invoice(
+        paid_client, 130, timezone.localdate() + timedelta(days=7),
+        number="REVIEW-FROZEN-INVOICE",
+    )
+    Payment.objects.create(
+        client=paid_client, invoice=recent,
+        amount=Decimal("130"), paid_on=timezone.localdate()
+    )
+    live = build_business_snapshot(base="USD")
+    shown = decision_review(decision, live)
+    assert shown["review_quality"] == "unchanged"
+    assert shown["observed_change"] == "0.00"
+    assert shown["direction_favorable"] is None
+    assert shown["current"] != shown["review_value"]
+    again = owner.patch(
+        endpoint,
+        data={"status": "reviewed", "outcome_note": "Rewrite history"},
+        content_type="application/json",
+    )
+    assert again.status_code == 409
+    decision.refresh_from_db()
+    assert (decision.reviewed_at, decision.review_value, decision.review_change) == frozen
+
+
+@pytest.mark.django_db
+def test_review_of_unmeasurable_strategy_stores_data_quality_instead_of_win(owner):
+    from ledger.services.business_intelligence import decision_review
+
+    strategy = BusinessStrategyDecision.objects.create(
+        title="Unknown baseline",
+        kind=BusinessStrategyDecision.Kind.OTHER,
+        metric=BusinessObjective.Metric.MONTHLY_RECEIPTS,
+        baseline=None,
+        review_on=timezone.localdate(),
+        started_on=timezone.localdate() - timedelta(days=12),
+        status=BusinessStrategyDecision.Status.ACTIVE,
+    )
+    response = owner.patch(
+        f"/api/intelligence/business/decisions/{strategy.id}",
+        data={"status": "reviewed", "outcome_note": "No prior trustworthy baseline"},
+        content_type="application/json"
+    )
+    assert response.status_code == 200
+    assert response.json()["review_quality"] == "missing_baseline"
+    assert response.json()["review_favorable"] is None
+    strategy.refresh_from_db()
+    assert decision_review(strategy, build_business_snapshot(base="USD"))["review_value"] is None
+
+
+@pytest.mark.django_db
+def test_future_dated_financial_entries_never_inflate_current_cash(paid_client):
+    today = timezone.localdate()
+    inv = invoice(
+        paid_client, 100, today + timedelta(days=12),
+        number="FUTURE-VALID-INVOICE",
+    )
+    Payment.objects.create(
+        client=paid_client, invoice=inv,
+        amount=Decimal("100"), paid_on=today + timedelta(days=14)
+    )
+    Expense.objects.create(
+        category="Future plan", amount=Decimal("70"), currency="USD",
+        spent_on=today + timedelta(days=20)
+    )
+    snap = build_business_snapshot(base="USD")
+    assert snap["metrics"]["collected"] == "0.00"
+    assert snap["metrics"]["expenses"] == "0.00"
+    assert snap["metrics"]["recorded_net_cash"] == "0.00"
+    assert snap["data_quality"]["future_dated_excluded"]["payments"] == 1
+    assert snap["data_quality"]["future_dated_excluded"]["expenses"] == 1
+    assert any(r["id"] == "future_dated_records" for r in snap["recommendations"])
+
+
+@pytest.mark.django_db
+def test_forecast_refuses_partial_currency_conversion_even_with_history(paid_client):
+    for months in (4, 3, 2):
+        anchor = timezone.localdate().replace(day=1)
+        from ledger.services.business_intelligence import _shift_month
+
+        date_paid = _shift_month(anchor, -months) + timedelta(days=8)
+        inv = invoice(
+            paid_client, 100, date_paid,
+            number=f"MISSING-FX-{months}"
+        )
+        Payment.objects.create(
+            invoice=inv, client=paid_client,
+            amount=Decimal("100"), paid_on=date_paid
+        )
+    Expense.objects.create(
+        category="Unconverted expense", amount=Decimal("25"),
+        currency="EUR", spent_on=timezone.localdate()
+    )
+    snap = build_business_snapshot(base="USD")
+    assert snap["forecast"]["available"] is False
+    assert "FX" in snap["forecast"]["reason"]
+    assert snap["anomalies"] == []
+
+
+@pytest.mark.django_db
+def test_sales_pipeline_records_factual_outcomes_not_booked_revenue(owner):
+    from ledger.models import BusinessOpportunity, Event
+
+    create = owner.post(
+        "/api/intelligence/business/opportunities",
+        data={
+            "name": "Scope-first proposal",
+            "source": "referral",
+            "proposed_amount": "340",
+            "currency": "USD",
+            "next_action": "Review the delivery brief",
+        },
+        content_type="application/json",
+    )
+    assert create.status_code == 200, create.content
+    row_id = create.json()["id"]
+    initial = owner.get("/api/intelligence/business/overview").json()
+    assert initial["pipeline"]["total_open"] == 1
+    assert initial["pipeline"]["observed_win_share_pct"] is None
+    assert initial["metrics"]["collected"] == "0.00"
+    move = owner.patch(
+        f"/api/intelligence/business/opportunities/{row_id}",
+        data={"stage": "won", "next_action": "Issue signed contract"},
+        content_type="application/json",
+    )
+    assert move.status_code == 200
+    assert BusinessOpportunity.objects.get(id=row_id).closed_on == timezone.localdate()
+    final = owner.get("/api/intelligence/business/overview").json()
+    assert final["pipeline"]["won"] == 1
+    assert final["pipeline"]["closed_sample"] == 1
+    assert final["pipeline"]["observed_win_share_pct"] is None
+    assert final["metrics"]["collected"] == "0.00"
+    assert Event.objects.filter(kind="opportunity_stage_changed").exists()
+    # Fixing a falsely marked win is auditable and does not invent financial movements.
+    correct = owner.patch(
+        f"/api/intelligence/business/opportunities/{row_id}",
+        data={"stage": "lost", "lost_reason": "Budget not approved"},
+        content_type="application/json",
+    )
+    assert correct.status_code == 200
+    assert owner.get("/api/intelligence/business/overview").json()["pipeline"]["lost"] == 1
+
+
+@pytest.mark.django_db
+def test_sales_pipeline_validates_currency_quote_and_source(owner):
+    base = {"name": "Proposal", "source": "referral", "proposed_amount": "100", "currency": "USD"}
+    for changes in (
+        {"source": "personality_guess"},
+        {"proposed_amount": "-5"},
+        {"proposed_amount": "NaN"},
+        {"currency": "BADCODE"},
+        {"name": " "},
+    ):
+        payload = {**base, **changes}
+        response = owner.post(
+            "/api/intelligence/business/opportunities",
+            data=payload, content_type="application/json",
+        )
+        assert response.status_code == 422, (payload, response.content)
+
+
+@pytest.mark.django_db
+def test_observed_sales_win_share_requires_five_closed_cases():
+    from ledger.models import BusinessOpportunity
+    from ledger.services.sales_pipeline import pipeline_overview
+
+    for i in range(4):
+        BusinessOpportunity.objects.create(
+            name=f"Sales case {i}", stage=(
+                BusinessOpportunity.Stage.WON
+                if i < 3 else BusinessOpportunity.Stage.LOST
+            ),
+            source="outbound", currency="USD",
+            proposed_amount=Decimal("200"),
+            opened_on=timezone.localdate() - timedelta(days=25),
+            closed_on=timezone.localdate() - timedelta(days=2),
+        )
+    assert pipeline_overview()["observed_win_share_pct"] is None
+    BusinessOpportunity.objects.create(
+        name="Fifth case", stage=BusinessOpportunity.Stage.LOST,
+        source="outbound", currency="USD",
+        proposed_amount=Decimal("200"), opened_on=timezone.localdate(),
+        closed_on=timezone.localdate()
+    )
+    result = pipeline_overview()
+    assert result["closed_sample"] == 5
+    assert result["observed_win_share_pct"] == 60.0
+    assert "not a sales forecast" in result["limitations"]

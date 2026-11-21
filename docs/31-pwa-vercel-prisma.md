@@ -76,3 +76,7 @@ curl -fsS https://YOUR-DOMAIN/api/version
 - **Native Windows:** retain the dedicated packaged Windows app when you need a backend that runs without Docker/localhost service management.
 
 **Production acceptance remains conditional.** A browser-installable UI, a checked-in serverless function and a passing CI suite are not substitutes for a real cloud account, backups, credentials, domain/HTTPS, capacity budgeting and clean-device tests.
+
+## Intelligence and offline audit addendum
+
+The additional business-opportunity and frozen-review fields are covered by additive Django migrations 0008 and 0009. They must be applied in the backup-first deployment flow; no history is inferred for older reviewed decisions. The PWA's session isolation, update-reload guard and authenticated cache tests are documented in [audit 32](32-intelligence-pwa-audit.md). Cloud-installed PWAs continue to need online PostgreSQL for any financial operation. Local Docker/Windows can perform internal analytics offline, **but optional Gemini/Grok advice and third-party FX refresh still require internet**. Never assume these external dependencies function fully without network access.

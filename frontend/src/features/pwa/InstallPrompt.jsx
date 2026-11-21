@@ -37,7 +37,8 @@ export default function InstallPrompt() {
         };
     }, []);
     if (installed) return null;
-    if (!installEvent && !ios) return null;
+    // Browsers may offer installation only through their own menu. Keep
+    // instructions discoverable even without beforeinstallprompt.
     async function install() {
         if (!installEvent) {
             setManual(true);
@@ -55,12 +56,18 @@ export default function InstallPrompt() {
     }
     return <div className="pwa-install-anchor">
       <button type="button" className="install-button" onClick={install}
-        aria-label="Install KC Ledger as an app"><Download size={14}/> Install app</button>
+        aria-label={installEvent ? "Install KC Ledger as an app" : "Show app installation instructions"}>
+        <Download size={14}/> {installEvent ? "Install app" : "Install guide"}</button>
       {manual && <div className="pwa-install-instructions" role="note">
         <button type="button" className="pwa-close-icon" aria-label="Close installation help"
           onClick={() => setManual(false)}><X size={15}/></button>
         <Smartphone size={16}/>
-        <p>On iPhone or iPad: open this page in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. Choose <strong>Open as Web App</strong> when offered.</p>
+        {ios ? <p>On iPhone or iPad: open in Safari, tap <strong>Share</strong>,
+            then <strong>Add to Home Screen</strong> and choose <strong>Open as Web App</strong>
+            when offered.</p>
+          : <p>In Chrome or Edge, open the browser menu and choose <strong>Install app</strong>
+            (or <strong>Apps → Install this site as an app</strong>). Installation
+            options depend on browser and device.</p>}
       </div>}
     </div>;
 }

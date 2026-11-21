@@ -25,6 +25,14 @@ The KC Ledger React frontend is a standards-based, installable Progressive Web A
 
 Browser installation options vary by device/browser. iOS Safari does not provide `beforeinstallprompt`, hence the manual guidance. Installing is supported through standard browsers; no app store is required.
 
+## Additional lifecycle/security safeguards
+
+- If an API request returns an expired-session 401, the app immediately hides the private dashboard and discards in-memory financial query results; explicit logout clears private query caches, too.
+- When the server cannot confirm a logout, the application reports that server-side revocation was **not** verified instead of claiming success.
+- A new service worker can be snoozed without losing access to a persistent "Update ready" control; applying it requires explicit confirmation because unfinished form edits may be lost.
+- Chrome/Edge install instructions remain discoverable even if no `beforeinstallprompt` event was issued.
+- Browser E2E now exercises the authenticated dashboard before asserting that no private API/admin/download responses landed in CacheStorage.
+
 ## Cache and security policy
 
 - The generated service worker only precaches the public app shell, hashed JavaScript/CSS, SVG/PNG icons, and public build metadata. Its runtime policy for `/api/`, `/admin/`, `/downloads/`, `/static/` is **NetworkOnly** and all API requests explicitly use `cache: no-store`.

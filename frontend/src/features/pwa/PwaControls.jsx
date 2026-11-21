@@ -5,6 +5,7 @@ import { RefreshCw, X } from "lucide-react";
 export default function PwaControls() {
     const [dismissOfflineReady, setDismissOfflineReady] = useState(false);
     const [updateError, setUpdateError] = useState("");
+    const [updateSnoozed, setUpdateSnoozed] = useState(false);
     const {
         offlineReady: [offlineReady, setOfflineReady],
         needRefresh: [needRefresh, setNeedRefresh],
@@ -14,6 +15,9 @@ export default function PwaControls() {
     });
     const showStatus = (offlineReady && !dismissOfflineReady) || needRefresh || updateError;
     async function update() {
+        if (!window.confirm("Apply the new version? Unsaved form entries will be lost.")) {
+            return;
+        }
         try {
             setUpdateError("");
             await updateServiceWorker(true);
@@ -22,7 +26,11 @@ export default function PwaControls() {
         }
     }
     return <>
-      {showStatus && <div className="pwa-update-notice" role="status" aria-live="polite">
+      {needRefresh && updateSnoozed && <button type="button"
+        className="pwa-update-minimized" onClick={() => setUpdateSnoozed(false)}>
+        <RefreshCw size={13}/> Update ready
+      </button>}
+      {showStatus && !updateSnoozed && <div className="pwa-update-notice" role="status" aria-live="polite">
         <div>
           <strong>{needRefresh ? "A newer KC Ledger version is ready" :
               updateError ? "App update needs attention" : "KC Ledger is installed for offline launch"}</strong>
@@ -34,8 +42,12 @@ export default function PwaControls() {
         <button type="button" className="pwa-close-icon" aria-label="Dismiss app update notice"
           onClick={() => {
               setOfflineReady(false);
-              setNeedRefresh(false);
-              setDismissOfflineReady(true);
+              if (needRefresh) {
+                  setUpdateSnoozed(true);
+              } else {
+                  setNeedRefresh(false);
+                  setDismissOfflineReady(true);
+              }
               setUpdateError("");
           }}><X size={17}/></button>
       </div>}

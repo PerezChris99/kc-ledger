@@ -42,6 +42,12 @@ export async function api(path, init = {}) {
         throw error;
     }
     if (!response.ok) {
+        if (response.status === 401 && !path.startsWith("/api/auth/login")
+            && path !== "/api/session") {
+            // A revoked/expired session must not leave an old client/financial
+            // dashboard visible through in-memory query results.
+            window.dispatchEvent(new Event("kc-ledger:session-expired"));
+        }
         let message = "Request failed.";
         try {
             const body = await response.json();

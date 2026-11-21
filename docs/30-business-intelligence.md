@@ -50,6 +50,16 @@ Forecast readiness requires **at least three completed months containing recorde
 
 **Sensitivity lab** lets you adjust illustrative effects of pricing, collections and cost levels. Percentages are assumed linear **solely for arithmetic**. No claim is made that raising prices really produces the stated receipts. Build actual lead and client conversion data before treating those levers as real forecasts.
 
+## Latest audit corrections: evidence integrity and real sales outcomes
+
+Previous versions could reclassify a reviewed strategy whenever live numbers changed, and marked a zero movement as favorable. Migration 0008 now stores the review timestamp, actual observed value, change, optional improvement verdict and evidence-quality reason. Owner reviews are closed snapshots: later live results remain visible separately, and closed reviews are not overwritten. Historical reviews from before this change remain **unmeasured** until a new experiment captures a genuine baseline.
+
+Cash metrics now exclude future-dated payments, expenses, time entries and future-issued invoices from current totals. The report identifies excluded records. Missing conversions disable historical scenario/anomaly outputs, rather than implying precise data. The 30-day unpaid invoice schedule is **not** a guaranteed cash forecast, and 90-day receipts concentration complements lifetime concentration.
+
+A small single-business opportunity pipeline (migration 0009) records lead source, factual stage, quoted amount, next action and actual won/lost outcome. A quote is never booked as revenue, invoice or payment. Won/closed descriptive percentage is displayed only after at least **five closed cases**; it is not an individualized conversion prediction. Neutral audited events record stage changes and corrections. The deterministic advisor can flag stale leads and poor documented conversion, with source/volume caveats.
+
+See [scope-limited deep audit](32-intelligence-pwa-audit.md).
+
 ## Goals, strategy experiments, and self-correction
 
 `BusinessObjective` stores a name, details, one of six measurable metrics, a numeric target, deadline and status. Metrics: monthly receipts, monthly recorded cash result, maximum monthly expenses, maximum overdue unpaid balance, active clients, and collected receipts per logged hour.

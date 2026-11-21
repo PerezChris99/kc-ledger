@@ -618,3 +618,27 @@ a:hover { color: var(--kc-navy); }
 @media (prefers-reduced-motion: reduce) {
   .pwa-update-notice, .pwa-offline-screen { transition: none; animation: none; }
 }
+
+/* Security and update lifecycle improvements. */
+.pwa-update-minimized { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 950; background: #0B1B3D; color: #fff; border: 1px solid #394A65; padding: 10px 12px; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
+.pwa-logout-warning { position: fixed; z-index: 200; top: 12px; left: 50%; transform: translateX(-50%); width: min(550px, calc(100vw - 24px)); padding: 14px; background: #FFF4E5; color: #663D18; border: 1px solid #DFB780; line-height: 1.5; font-size: 13px; }
+@media (max-width: 640px) { .pwa-update-minimized { bottom: calc(14px + env(safe-area-inset-bottom)); } }
+
+/* Compact, evidence-first opportunity workspace. */
+.command-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.command-opportunity-list { display: grid; gap: 9px; margin-top: 13px; }
+.command-opportunity { display: grid; align-items: end; grid-template-columns: minmax(170px, 1.5fr) minmax(122px, .65fr) minmax(190px, 1fr) auto; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.command-opportunity:last-child { border-bottom: 0; }
+.command-opportunity > div { min-width: 0; }
+.command-opportunity > div > strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.command-opportunity > div > small { display: block; margin-top: 6px; color: var(--text-muted); font-size: 11px; }
+.command-opportunity label { display: grid; gap: 6px; color: var(--text-muted); font-size: 10px; }
+.command-opportunity select, .command-opportunity input { width: 100%; min-width: 0; padding: 9px; background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+.command-opportunity .small-button { white-space: nowrap; }
+@media (max-width: 1100px) {
+  .command-kpis { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .command-opportunity { grid-template-columns: repeat(2, minmax(0,1fr)); align-items: end; }
+}
+@media (max-width: 620px) {
+  .command-opportunity { grid-template-columns: minmax(0,1fr); gap: 8px; }
+}

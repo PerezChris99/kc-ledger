@@ -13,6 +13,12 @@ KC Ledger builds a browser-installable Progressive Web App for desktop, Android 
 - [PWA installation and offline behavior](docs/16-pwa.md)
 - [Vercel + Prisma 2 GB setup and production acceptance](docs/31-pwa-vercel-prisma.md)
 
+## Intelligence and PWA deep-hardening audit
+
+The system now captures review outcomes as fixed, dated evidence, distinguishes unchanged metrics from real improvement, excludes future-dated cash movements, fails closed on missing FX, and records actual lead/proposal stages and won/lost outcomes. The financial advisor uses documented evidence, not invented future demand; client matching uses bounded historical candidates. The installed PWA adds authenticated cache/session isolation, visible update recovery and install guidance.
+
+- [Detailed scope-preserving audit, applied corrections, deferred dependencies and tests](docs/32-intelligence-pwa-audit.md)
+
 ## Business-wide strategy and financial intelligence
 
 The intelligence engine now begins with a **Business command** workspace: recorded cash movement, costs by category, project and client cash contribution, overdue exposure, multi-period trends and anomalies, owner-defined goals, tracked strategy experiments, an illustrative cash sensitivity lab and an evidence-based client pitching guide. The local deterministic advisor challenges high-risk assumptions and previous underperforming decisions before optional Gemini/Grok second opinions.

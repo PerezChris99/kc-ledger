@@ -71,6 +71,7 @@ export default function App() {
     const [moreOpen, setMoreOpen] = useState(false);
     const [online, setOnline] = useState(() => navigator.onLine !== false || isLoopbackOrigin());
     const queryClient = useQueryClient();
+    const [signOutWarning, setSignOutWarning] = useState("");
     const session = useQuery({ queryKey: ["session"], queryFn: () => api("/api/session"), retry: false });
     const preferences = useQuery({ queryKey: ["settings"], queryFn: () => api("/api/settings"), enabled: Boolean(session.data?.authenticated) });
     useEffect(() => { const handler = (event) => { const target = event.detail; if (typeof target === "string")
@@ -102,13 +103,39 @@ export default function App() {
             window.removeEventListener("offline", disconnected);
         };
     }, [queryClient]);
-    async function signOut() { try {
-        await api("/api/auth/logout", { method: "POST", body: "{}" });
+    useEffect(() => {
+        const expire = () => {
+            void queryClient.cancelQueries().then(() => {
+                queryClient.removeQueries({
+                    predicate: query => query.queryKey[0] !== "session"
+                });
+                queryClient.setQueryData(["session"], { authenticated: false });
+                setActive("dashboard");
+            });
+        };
+        window.addEventListener("kc-ledger:session-expired", expire);
+        return () => window.removeEventListener("kc-ledger:session-expired", expire);
+    }, [queryClient]);
+    async function signOut() {
+        let verified = false;
+        try {
+            await api("/api/auth/logout", { method: "POST", body: "{}" });
+            verified = true;
+        } catch {
+            setSignOutWarning(
+                "The server could not confirm logout. Local financial views are hidden, " +
+                "but the remote session may remain active until it expires."
+            );
+        } finally {
+            await queryClient.cancelQueries();
+            queryClient.removeQueries({
+                predicate: query => query.queryKey[0] !== "session"
+            });
+            queryClient.setQueryData(["session"], { authenticated: false });
+            setActive("dashboard");
+            if (verified) setSignOutWarning("");
+        }
     }
-    finally {
-        await queryClient.invalidateQueries({ queryKey: ["session"] });
-        setActive("dashboard");
-    } }
     if (!online)
         return <main className="pwa-offline-screen" role="main">
           <div className="pwa-offline-tile">
@@ -123,7 +150,13 @@ export default function App() {
     if (session.isLoading)
         return <main className="boot-screen"><span className="wordmark-symbol">KC</span><p className="eyebrow">VERIFYING PRIVATE SESSION</p></main>;
     if (!session.data?.authenticated)
-        return <LoginPage unavailable={Boolean(session.error)} onSuccess={() => { void queryClient.invalidateQueries({ queryKey: ["session"] }); }}/>;
+        return <>{signOutWarning && <div role="alert" className="pwa-logout-warning">
+            {signOutWarning}</div>}
+          <LoginPage unavailable={Boolean(session.error)}
+            onSuccess={() => {
+                setSignOutWarning("");
+                void queryClient.invalidateQueries({ queryKey: ["session"] });
+            }}/></>;
     const page = active === "clients" ? <ClientsPage initialQuery={search}/> :
         active === "invoices" ? <InvoicesPage /> : active === "plans" ? <PlansPage /> :
             active === "insights" ? <InsightsPage /> : active === "intelligence" ? <IntelligencePage /> : active === "avoid" ? <AvoidPage /> :

@@ -277,3 +277,68 @@ def test_no_database_writes_when_cached_evidence_is_unchanged():
     ]
     assert not writes
     assert len(queries) < 20
+
+
+@pytest.mark.django_db
+def test_repeat_client_intelligence_reads_use_materialized_profiles(owner):
+    from ledger.services.intelligence import read_intelligence
+
+    company = Client.objects.create(name="Read-cache company")
+    adverse_event(company, "scope_creep")
+    materialized = read_intelligence()
+    assert company.id in materialized
+    with patch("ledger.services.intelligence.refresh_intelligence") as rebuilding:
+        second = read_intelligence()
+        assert second[company.id]["signals"]["scope_creep"] == 1
+        response = owner.get("/api/intelligence/overview")
+        assert response.status_code == 200
+        rebuilding.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_materialized_intelligence_invalidates_for_a_new_client(owner):
+    from ledger.services.intelligence import read_intelligence
+
+    first = Client.objects.create(name="Initial evidence record")
+    read_intelligence()
+    new = Client.objects.create(name="New client not yet materialized")
+    result = read_intelligence()
+    assert first.id in result and new.id in result
+
+
+@pytest.mark.django_db
+def test_materially_new_evidence_reopens_a_previous_review(owner):
+    historical = Client.objects.create(name="Original historical reference", score=30)
+    current = Client.objects.create(name="Later business prospect", score=65)
+    for client in (historical, current):
+        adverse_event(client, "scope_creep")
+        adverse_event(client, "chargeback")
+    refresh_intelligence()
+    record = ClientPatternAlert.objects.get(client=current, reference_client=historical)
+    record.status = ClientPatternAlert.Status.DISMISSED
+    record.review_note = "The original events were checked"
+    record.save(update_fields=["status", "review_note", "updated_at"])
+    previous_signature = record.signature
+    refresh_intelligence()
+    record.refresh_from_db()
+    assert record.status == ClientPatternAlert.Status.DISMISSED
+    # Another documented incident materially changes the pattern; the
+    # previous acknowledgment cannot silently suppress the new observation.
+    adverse_event(current, "scope_creep")
+    refresh_intelligence()
+    record.refresh_from_db()
+    assert record.signature != previous_signature
+    assert record.status == ClientPatternAlert.Status.OPEN
+    assert record.review_note == ""
+
+
+@pytest.mark.django_db
+def test_health_score_changes_invalidate_materialized_client_evidence():
+    from ledger.services.intelligence import read_intelligence
+
+    client = Client.objects.create(name="Score-only revaluation", score=50)
+    read_intelligence()
+    client.score = 19
+    client.save(update_fields=["score", "updated_at"])
+    result = read_intelligence()
+    assert result[client.id]["metrics"]["risk_index"] > 0

@@ -31,6 +31,7 @@ from ledger.services.intelligence import (
     evidence_for_provider,
     local_recommendations,
     refresh_intelligence,
+    read_intelligence,
 )
 
 router = Router(tags=["client-intelligence"])
@@ -110,7 +111,7 @@ def signal_types(request):
 def overview(request):
     # This refreshes cached derived profiles and one observation per day, not
     # financial records or the user's judgments about individual clients.
-    analyses = refresh_intelligence()
+    analyses = read_intelligence()
     clients = list(
         Client.objects.only("id", "name", "status", "score", "created_at").order_by("name", "id")
     )
@@ -243,7 +244,7 @@ def overview(request):
 @router.get("/clients/{client_id}")
 def intelligence_detail(request, client_id: int):
     client = _get_client(client_id)
-    analyses = refresh_intelligence()
+    analyses = read_intelligence()
     summary = local_recommendations(client.id, analyses)
     alerts = _alerts_for_client(client)
     history = list(
@@ -374,7 +375,7 @@ def request_client_advice(request, payload: AdviceIn):
     if payload.provider not in {"local", "gemini", "grok"}:
         raise HttpError(422, "Unsupported advice provider.")
     # The system's own rules never need an API key or permission to call outside.
-    analyses = refresh_intelligence()
+    analyses = read_intelligence()
     if payload.provider == "local":
         return local_recommendations(client.id, analyses)
 

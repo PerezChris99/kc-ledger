@@ -14,6 +14,7 @@ from ledger.models import (
     BusinessAdvisoryReport,
     BusinessObjective,
     BusinessStrategyDecision,
+    BusinessOpportunity,
     Client,
     ClientAdvisoryReport,
     Event,
@@ -32,8 +33,10 @@ from ledger.services.business_intelligence import (
     pitch_playbook,
     prioritize_goals_and_decisions,
     recommend_strategy_paths,
+    review_outcome,
     simulate,
 )
+from ledger.services.sales_pipeline import pipeline_overview
 
 router = Router(tags=["business-intelligence"])
 METRICS = {item.value for item in BusinessObjective.Metric}
@@ -67,6 +70,21 @@ class StrategyIn(Schema):
 class StrategyReview(Schema):
     status: str
     outcome_note: str = ""
+
+
+class OpportunityIn(Schema):
+    name: str
+    source: str = "unknown"
+    proposed_amount: Decimal = Decimal(0)
+    currency: str = "USD"
+    next_action: str = ""
+    client_id: int | None = None
+
+
+class OpportunityUpdate(Schema):
+    stage: str
+    next_action: str = ""
+    lost_reason: str = ""
 
 
 class BusinessAdviceIn(Schema):
@@ -117,6 +135,11 @@ def _record_audit(kind, title, detail, client=None):
 
 def _portfolio(include_decisions=True):
     snapshot = build_business_snapshot()
+    pipeline = pipeline_overview()
+    snapshot["recommendations"].extend(pipeline["recommendations"])
+    snapshot["recommendations"].sort(
+        key=lambda row: ({"high": 0, "medium": 1, "low": 2}[row["priority"]], row["id"])
+    )
     objectives = list(BusinessObjective.objects.order_by("due_date", "id")[:100])
     decisions = (
         list(
@@ -128,6 +151,7 @@ def _portfolio(include_decisions=True):
         else []
     )
     result = {key: value for key, value in snapshot.items() if key != "metric_values"}
+    result["pipeline"] = pipeline
     result["objectives"] = [objective_progress(row, snapshot) for row in objectives]
     result["decisions"] = [decision_review(row, snapshot) for row in decisions]
     result["recommendations"] = prioritize_goals_and_decisions(snapshot, objectives, decisions)
@@ -147,6 +171,91 @@ def business_overview(request):
     data, _ = _portfolio()
     data["scope"] = "business-operations"
     return data
+
+
+@router.get("/opportunities")
+def list_opportunities(request):
+    return pipeline_overview()
+
+
+@router.post("/opportunities")
+@transaction.atomic
+def create_opportunity(request, payload: OpportunityIn):
+    if payload.source not in BusinessOpportunity.Source.values:
+        raise HttpError(422, "Unsupported, recorded acquisition source.")
+    if (
+        not payload.proposed_amount.is_finite()
+        or payload.proposed_amount < 0
+        or payload.proposed_amount > Decimal("999999999999999")
+        or payload.proposed_amount.as_tuple().exponent < -2
+    ):
+        raise HttpError(422, "Quote must be a nonnegative finite amount with two decimals.")
+    name = _safe_text(payload.name, 160, "Opportunity name", required=True)
+    next_action = _safe_text(payload.next_action, 280, "Next action")
+    currency = payload.currency.strip().upper()
+    if len(currency) != 3 or not currency.isalpha() or not currency.isascii():
+        raise HttpError(422, "Use a three-letter ISO currency code.")
+    client = None
+    if payload.client_id is not None:
+        try:
+            client = Client.objects.get(id=payload.client_id)
+        except Client.DoesNotExist as exc:
+            raise HttpError(422, "Linked client is not an active ledger record.") from exc
+    row = BusinessOpportunity.objects.create(
+        name=name,
+        source=payload.source,
+        client=client,
+        proposed_amount=payload.proposed_amount,
+        currency=currency,
+        next_action=next_action,
+        opened_on=timezone.localdate(),
+    )
+    _record_audit(
+        "opportunity_created", "Sales opportunity recorded",
+        f"Opportunity {row.id} entered pipeline as {row.stage}.",
+        client=client,
+    )
+    return {"id": row.id, "stage": row.stage}
+
+
+@router.patch("/opportunities/{opportunity_id}")
+@transaction.atomic
+def update_opportunity(request, opportunity_id: int, payload: OpportunityUpdate):
+    if payload.stage not in BusinessOpportunity.Stage.values:
+        raise HttpError(422, "Unsupported recorded opportunity stage.")
+    next_action = _safe_text(payload.next_action, 280, "Next action")
+    lost_reason = _safe_text(payload.lost_reason, 100, "Lost reason")
+    try:
+        row = (
+            BusinessOpportunity.objects.select_for_update()
+            .get(id=opportunity_id)
+        )
+    except BusinessOpportunity.DoesNotExist as exc:
+        raise HttpError(404, "Opportunity not found.") from exc
+    old = row.stage
+    row.stage = payload.stage
+    row.next_action = next_action
+    row.closed_on = (
+        timezone.localdate()
+        if row.stage in {
+            BusinessOpportunity.Stage.WON,
+            BusinessOpportunity.Stage.LOST,
+        }
+        else None
+    )
+    row.lost_reason = lost_reason if row.stage == BusinessOpportunity.Stage.LOST else ""
+    row.save(update_fields=[
+        "stage", "next_action", "closed_on", "lost_reason", "updated_at"
+    ])
+    _record_audit(
+        "opportunity_stage_changed", "Sales opportunity updated",
+        f"Opportunity {row.id}: {old} to {row.stage}. "
+        "Closed outcomes are owner-recorded, never automatically inferred.",
+        client=row.client,
+    )
+    return {"id": row.id, "stage": row.stage, "closed_on": (
+        row.closed_on.isoformat() if row.closed_on else None
+    )}
 
 
 @router.get("/pitch/{client_id}")
@@ -319,23 +428,61 @@ def create_strategy_decision(request, payload: StrategyIn):
 @router.patch("/decisions/{decision_id}")
 @transaction.atomic
 def review_strategy_decision(request, decision_id: int, payload: StrategyReview):
-    if payload.status not in BusinessStrategyDecision.Status.values:
-        raise HttpError(422, "Unsupported decision status.")
+    # A review is a durable outcome. Reopening or rewriting it would make the
+    # strategy "learn" from future figures instead of real past observations.
+    if payload.status not in {
+        BusinessStrategyDecision.Status.REVIEWED,
+        BusinessStrategyDecision.Status.CANCELLED,
+    }:
+        raise HttpError(422, "Choose reviewed or cancelled.")
     outcome = _safe_text(payload.outcome_note, 1200, "Outcome note")
     try:
-        row = BusinessStrategyDecision.objects.get(pk=decision_id)
+        row = (
+            BusinessStrategyDecision.objects.select_for_update()
+            .select_related("client")
+            .get(pk=decision_id)
+        )
     except BusinessStrategyDecision.DoesNotExist as exc:
         raise HttpError(404, "Strategy decision not found.") from exc
+    if row.status in {
+        BusinessStrategyDecision.Status.REVIEWED,
+        BusinessStrategyDecision.Status.CANCELLED,
+    }:
+        raise HttpError(409, "A completed review is historical evidence. Log a new experiment instead.")
     row.status = payload.status
     row.outcome_note = outcome
-    row.save(update_fields=["status", "outcome_note", "updated_at"])
+    fields = ["status", "outcome_note", "updated_at"]
+    if payload.status == BusinessStrategyDecision.Status.REVIEWED:
+        snapshot = build_business_snapshot()
+        value, change, favorable, quality = review_outcome(row, snapshot)
+        if row.review_on > timezone.localdate() and quality in {"observed", "unchanged"}:
+            # An owner may close a trial early, but an early change must not
+            # be treated as a successful completed experiment.
+            favorable = None
+            quality = "early_review"
+        row.reviewed_at = timezone.now()
+        row.review_value = value
+        row.review_change = change
+        row.review_favorable = favorable
+        row.review_quality = quality
+        fields.extend(
+            ["reviewed_at", "review_value", "review_change", "review_favorable", "review_quality"]
+        )
+    row.save(update_fields=fields)
     _record_audit(
         "business_strategy_reviewed",
         "Business strategy reviewed",
-        f"Strategy {row.id} moved to {row.status}.",
+        f"Strategy {row.id} moved to {row.status}; result {row.review_quality}.",
         client=row.client,
     )
-    return {"id": row.id, "status": row.status}
+    return {
+        "id": row.id,
+        "status": row.status,
+        "review_quality": row.review_quality,
+        "review_value": amount(row.review_value) if row.review_value is not None else None,
+        "review_favorable": row.review_favorable,
+    }
+
 
 
 def _anonymized_business_context(snapshot, objectives, decisions):
@@ -360,6 +507,9 @@ def _anonymized_business_context(snapshot, objectives, decisions):
         "has_missing_fx": bool(snapshot["data_quality"]["missing_fx"]),
         "expense_capture_verified": False,
         "forecast_available": snapshot["forecast"]["available"],
+        "pipeline_open_count": snapshot.get("pipeline", {}).get("total_open"),
+        "closed_sales_sample": snapshot.get("pipeline", {}).get("closed_sample"),
+        "observed_win_share_pct": snapshot.get("pipeline", {}).get("observed_win_share_pct"),
         "anomaly_codes": [entry["id"] for entry in snapshot["anomalies"][:8]],
         "rule_codes": [entry["id"] for entry in snapshot["recommendations"][:15]],
         "goals": [
@@ -393,6 +543,7 @@ def business_advice(request, payload: BusinessAdviceIn):
     if payload.provider not in {"local", "gemini", "grok"}:
         raise HttpError(422, "Unsupported strategy advisory provider.")
     overview, snapshot = _portfolio()
+    snapshot["pipeline"] = overview["pipeline"]
     if payload.provider == "local":
         return {
             "provider": "local",

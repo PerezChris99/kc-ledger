@@ -6,6 +6,7 @@ only explicit event categories and objective ledger/payment history.
 """
 
 from collections import Counter, defaultdict
+from datetime import datetime, timedelta
 from hashlib import sha256
 
 from django.db import transaction
@@ -17,6 +18,7 @@ from ledger.models import (
     ClientIntelligenceObservation,
     ClientIntelligenceProfile,
     ClientPatternAlert,
+    Meta,
     Event,
     Invoice,
     Payment,
@@ -148,7 +150,9 @@ def _counts_by_client(clients):
         )
     ):
         cid = row["client_id"]
-        sample[cid] += row["total"]
+        # Payments already belong to invoices. Do not count both the
+        # invoice and its payment as independent evidence of reliability.
+        # Their dated outcomes still contribute to the risk vocabulary.
         # Do not double count manual and objective evidence of late payments.
         signal_map[cid]["payment_late"] = max(signal_map[cid]["payment_late"], row["late"])
     return signal_map, sample, invoices
@@ -247,6 +251,43 @@ def _make_summary(client, signals, invoice, n):
 
 
 @transaction.atomic
+def read_intelligence(max_age_seconds=1200):
+    """Read materialized client intelligence without full recalculation on GET.
+
+    A mutating signal still triggers an immediate refresh. Scheduled refresh
+    and stale reads can rebuild after 20 minutes; new clients also trigger
+    materialization. This prevents every dashboard tab from doing O(N²) pattern
+    comparisons and writing today's observations.
+    """
+    marker = Meta.objects.filter(key="client_intelligence_refreshed_at").values_list(
+        "value", flat=True
+    ).first()
+    if marker:
+        try:
+            refreshed = datetime.fromisoformat(marker)
+            age = (timezone.now() - refreshed).total_seconds()
+        except (TypeError, ValueError):
+            age = max_age_seconds + 1
+        if 0 <= age < max_age_seconds and refreshed.date() == timezone.localdate():
+            profiles = list(
+                ClientIntelligenceProfile.objects.values(
+                    "client_id", "signals", "metrics", "score_snapshot"
+                )
+            )
+            live_scores = dict(Client.all_objects.values_list("id", "score"))
+            if len(profiles) == len(live_scores) and all(
+                row["score_snapshot"] == live_scores.get(row["client_id"])
+                for row in profiles
+            ):
+                return {
+                    row["client_id"]: {
+                        "signals": row["signals"], "metrics": row["metrics"]
+                    }
+                    for row in profiles
+                }
+    return refresh_intelligence()
+
+
 def refresh_intelligence():
     """Build current profiles for all live clients; record daily observations and matches.
 
@@ -336,32 +377,57 @@ def refresh_intelligence():
         for row in ClientPatternAlert.objects.filter(client_id__in=ids)
     }
 
-    for i, current in enumerate(clients):
-        # Retired clients remain valuable historical evidence, but must not
-        # receive new alerts or be presented as active prospects.
-        if current.deleted_at is not None:
-            continue
+    # Index negative evidence codes instead of comparing every possible
+    # pair. Bound the candidate set for an owner-operated ledger so a large
+    # CRM import cannot make a dashboard read quadratically expensive.
+    # This is a review heuristic, not exhaustive identity matching.
+    MAX_REFERENCES_PER_SIGNAL = 250
+    previous_by_code = defaultdict(list)
+    client_by_id = {row.id: row for row in clients}
+    for current in clients:
         current_info = analyses[current.id]
+        current_codes = [
+            code for code in NEGATIVE_SIGNALS
+            if current_info["signals"].get(code, 0) > 0
+        ]
+        candidates = Counter()
+        for code in current_codes:
+            for previous_id in previous_by_code[code][-MAX_REFERENCES_PER_SIGNAL:]:
+                candidates[previous_id] += 1
+        # Retired clients can still inform historical review. Only current
+        # live clients may receive a new risk alert.
         matches = []
-        if len(current_info["metrics"]["adverse_signals"]) >= 2:
-            for previous in clients[:i]:
-                previous_info = analyses[previous.id]
-                # Comparisons require a meaningful adverse history; a neutral
-                # or superficially similar client is not a risk reference.
+        if current.deleted_at is None and len(current_codes) >= 2:
+            for previous_id, shared_codes in candidates.items():
+                if shared_codes < 2:
+                    continue
+                previous = client_by_id[previous_id]
+                previous_info = analyses[previous_id]
                 if (
                     previous_info["metrics"]["risk_index"] < 25
                     and previous.status != Client.Status.BLACKLISTED
                 ):
                     continue
-                similarity, overlap = _similarity(current_info["signals"], previous_info["signals"])
+                similarity, overlap = _similarity(
+                    current_info["signals"], previous_info["signals"]
+                )
                 if similarity:
                     matches.append((previous, similarity, overlap))
+        # A client becomes an available historical reference only AFTER the
+        # current client's comparisons, preventing self matches.
+        for code in current_codes:
+            previous_by_code[code].append(current.id)
+        if current.deleted_at is not None:
+            continue
         matches.sort(key=lambda item: (-item[1], item[0].id))
         active_previous_ids = set()
         for previous, similarity, overlap in matches[:5]:
             active_previous_ids.add(previous.id)
             fingerprint = sha256(
-                ("|".join(sorted(entry["kind"] for entry in overlap))).encode("ascii")
+                ("|".join(
+                    f"{entry['kind']}:{entry['current_count']}:{entry['past_count']}"
+                    for entry in sorted(overlap, key=lambda row: row["kind"])
+                )).encode("ascii")
             ).hexdigest()
             existing = existing_alerts.get((current.id, previous.id))
             state = ClientPatternAlert.Status.OPEN
@@ -375,6 +441,11 @@ def refresh_intelligence():
                 "similarity": similarity,
                 "status": state,
             }
+            if existing and existing.signature != fingerprint:
+                # An acknowledged incident pattern is not an exemption for
+                # new incidents of the same type. Clear the old review note
+                # when the documented evidence has materially changed.
+                values["review_note"] = ""
             if existing is None:
                 entry, _ = ClientPatternAlert.objects.update_or_create(
                     client=current, reference_client=previous, defaults=values
@@ -398,12 +469,25 @@ def refresh_intelligence():
             for entry in existing_alerts.values():
                 if entry.id in stale_ids:
                     entry.status = ClientPatternAlert.Status.RESOLVED
+    stamp, created = Meta.objects.get_or_create(
+        key="client_intelligence_refreshed_at",
+        defaults={"value": assessed_at.isoformat()},
+    )
+    if not created:
+        try:
+            prior_time = datetime.fromisoformat(stamp.value)
+            stamp_age = (assessed_at - prior_time).total_seconds()
+        except (TypeError, ValueError):
+            stamp_age = 1201
+        if stamp_age >= 1200 or stamp_age < 0:
+            stamp.value = assessed_at.isoformat()
+            stamp.save(update_fields=["value"])
     return analyses
 
 
 def local_recommendations(client_id, analyses=None):
     if analyses is None:
-        analyses = refresh_intelligence()
+        analyses = read_intelligence()
     assessment = analyses[client_id]["metrics"]
     return {
         "provider": "local",
