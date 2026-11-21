@@ -417,7 +417,9 @@ def test_business_alerts_emit_once_and_are_visible_to_notification_polling(owner
     assert emit_business_intelligence_alerts() == 0
     assert Event.objects.filter(kind="business_alert_overdue_exposure").count() == before + 1
     since = (timezone.now() - timedelta(minutes=5)).isoformat()
-    response = owner.get("/api/notifications?since=" + since)
+    from urllib.parse import quote
+
+    response = owner.get("/api/notifications?since=" + quote(since, safe=""))
     assert response.status_code == 200
     assert any(row["kind"] == "business_alert_overdue_exposure" for row in response.json()["items"])
 
