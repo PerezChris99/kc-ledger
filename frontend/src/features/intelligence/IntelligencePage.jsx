@@ -6,6 +6,7 @@ import {
 } from "chart.js";
 import { Bar, Doughnut, Line, Scatter, Radar, PolarArea } from "react-chartjs-2";
 import { api } from "../../api";
+import BusinessCommandPage from "../business/BusinessCommandPage";
 
 ChartJS.register(
     CategoryScale, LinearScale, RadialLinearScale, BarElement, PointElement,
@@ -36,7 +37,7 @@ function ChartPanel({ heading, meta, children, empty = false }) {
 }
 
 export default function IntelligencePage() {
-    const [tab, setTab] = useState("overview");
+    const [tab, setTab] = useState("business");
     const [selectedId, setSelectedId] = useState(null);
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
@@ -51,7 +52,8 @@ export default function IntelligencePage() {
     const queryClient = useQueryClient();
     const overview = useQuery({
         queryKey: ["intelligence-overview"],
-        queryFn: () => api("/api/intelligence/overview"), refetchInterval: 60000
+        queryFn: () => api("/api/intelligence/overview"), refetchInterval: 60000,
+        enabled: tab !== "business"
     });
     const types = useQuery({
         queryKey: ["intelligence-signals"],
@@ -137,6 +139,19 @@ export default function IntelligencePage() {
             setError(err instanceof Error ? err.message : "Advisory provider unavailable.");
         } finally { setBusy(false); }
     }
+    if (tab === "business") {
+        return <div className="intelligence-page">
+          <div className="intel-tabs" role="tablist" aria-label="Intelligence workspace">
+            {[
+                ["business", "Business command"], ["overview", "Client portfolio"],
+                ["patterns", "Pattern watch"], ["client", "Client analysis"]
+            ].map(([id, label]) => <button type="button" role="tab"
+                aria-selected={tab === id} className={tab === id ? "active" : ""}
+                key={id} onClick={() => setTab(id)}>{label}</button>)}
+          </div>
+          <BusinessCommandPage/>
+        </div>;
+    }
     if (overview.isLoading) return <div className="loading-panel">Analyzing the complete recorded client history…</div>;
     if (overview.error || !data) return <div className="error-panel">Client intelligence is unavailable. Check the database migration and API.</div>;
     const scores = data.score_distribution ?? [];
@@ -160,7 +175,8 @@ export default function IntelligencePage() {
       </div>
       <div className="intel-tabs" role="tablist" aria-label="Intelligence workspace">
         {[
-            ["overview", "Portfolio"], ["patterns", "Pattern watch"], ["client", "Client analysis"]
+            ["business", "Business command"], ["overview", "Client portfolio"],
+            ["patterns", "Pattern watch"], ["client", "Client analysis"]
         ].map(([id, label]) => <button
             type="button" role="tab" aria-selected={tab === id} key={id}
             className={tab === id ? "active" : ""} onClick={() => setTab(id)}

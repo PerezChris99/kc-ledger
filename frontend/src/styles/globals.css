@@ -537,3 +537,60 @@ a:hover { color: var(--kc-navy); }
     .intel-tabs button { padding: 8px; font-size: 11px; }
     .intel-alert-head { flex-direction: column; }
 }
+
+/* Data-dense business command: separate performance, experiments, pitches and advice. */
+.command-page { display: grid; gap: 16px; min-width: 0; }
+.command-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.command-heading-title { display: block; color: var(--text); font-size: 20px; font-weight: 650; letter-spacing: -.04em; margin-bottom: 5px; }
+.command-heading .page-subtitle { margin: 0; max-width: 710px; }
+.command-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.command-kpis .kpi-value { font-size: clamp(17px, 2.5vw, 27px); }
+.command-accounting-warning { margin: 0; padding: 12px 14px; font-size: 12px; line-height: 1.6; color: var(--text-secondary); border-left: 2px solid var(--warning); background: var(--surface); }
+.command-graphs, .command-two { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+.command-chart-panel { min-height: 320px; }
+.command-chart { height: 275px; margin-top: 12px; min-width: 0; overflow: hidden; position: relative; }
+.command-chart canvas { max-width: 100%; }
+.command-two > .panel { min-width: 0; }
+.command-finding { margin-top: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 12px; line-height: 1.65; }
+.command-finding:last-child { border-bottom: 0; }
+.command-finding > strong { display: block; font-size: 13px; }
+.command-finding p { color: var(--text-secondary); margin: 5px 0; }
+.command-finding small, .command-finding .settings-note { color: var(--text-muted); font-size: 11px; }
+.command-forecast { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin: 18px 0; }
+.command-forecast > div { padding: 13px 8px; background: var(--primary-surface); min-width: 0; }
+.command-forecast small, .command-decision-numbers span { display: block; color: var(--text-muted); font-size: 10px; }
+.command-forecast strong { display: block; font: 600 15px var(--font-mono); overflow-wrap: anywhere; margin-top: 6px; }
+.command-goals { display: grid; gap: 10px; margin-top: 12px; }
+.command-goal { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.command-goal > div:first-child { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.command-goal small { font-size: 11px; color: var(--text-muted); }
+.command-goal .mono { margin: 10px 0 0; font-size: 13px; }
+.command-goal .mono small { margin-left: 8px; }
+.command-levers { display: grid; gap: 15px; padding: 20px 0; }
+.command-levers label { font-size: 12px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.command-levers input { grid-column: 1 / -1; width: 100%; accent-color: var(--chart-revenue); }
+.command-result { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 12px; font-size: 12px; }
+.command-result small { display: block; line-height: 1.6; color: var(--text-muted); }
+.command-result strong { margin-left: 8px; }
+.command-decision-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 12px; }
+.command-decision { border: 1px solid var(--border); padding: 13px; min-width: 0; }
+.command-decision-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; font-size: 12px; }
+.command-decision-head > span { font: 500 10px var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.command-decision-numbers { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin: 10px 0; }
+.command-decision-numbers strong { display: block; color: var(--text); font: 600 12px var(--font-mono); margin-top: 6px; overflow-wrap: anywhere; }
+.command-review { display: grid; gap: 12px; border-top: 1px solid var(--border); padding-top: 14px; margin-top: 16px; }
+.command-review label, .command-select-label { display: grid; gap: 8px; font-size: 11px; }
+.command-review textarea, .command-select-label select { width: 100%; border: 1px solid var(--border); color: var(--text); background: var(--surface); padding: 10px; }
+.command-select-label { margin: 18px 0; }
+.command-pitch > strong { display: block; margin: 15px 0 4px; }
+.command-pitch { line-height: 1.7; font-size: 12px; }
+.command-advice { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 12px; line-height: 1.6; font-size: 12px; }
+.command-advice h4 { margin: 12px 0 4px; font-size: 12px; }
+.command-two label select, .command-two label input, .command-two label textarea { max-width: 100%; }
+@media (max-width: 950px) { .command-graphs { grid-template-columns: minmax(0,1fr); } .command-chart { height: 260px; } }
+@media (max-width: 760px) {
+  .command-two, .command-decision-grid { grid-template-columns: minmax(0,1fr); }
+  .command-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .command-heading { flex-direction: column; }
+  .command-forecast { grid-template-columns: minmax(0,1fr); }
+}

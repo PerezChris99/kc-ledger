@@ -37,6 +37,7 @@ test("intelligence charts, factual history matching, owner review and local advi
 
     const nav = page.getByRole("navigation", { name: "Main navigation" });
     await nav.getByRole("button", { name: "Intelligence", exact: true }).click();
+    await page.getByRole("tab", { name: "Client portfolio" }).click();
     await expect(page.getByText("CLIENT HEALTH DISTRIBUTION")).toBeVisible();
     await expect(page.getByText("HEALTH SCORE VS RISK INDEX")).toBeVisible();
     await expect(page.locator(".intel-chart canvas").first()).toBeVisible();

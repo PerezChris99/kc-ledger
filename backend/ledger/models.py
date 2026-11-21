@@ -484,3 +484,98 @@ class ClientAdvisoryReport(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["client", "created_at"], name="advice_client_created_idx")]
+
+
+class BusinessObjective(models.Model):
+    """Owner-defined measurable outcomes, separate from numerical forecasts."""
+
+    class Metric(models.TextChoices):
+        MONTHLY_RECEIPTS = "monthly_receipts", "Monthly cash receipts"
+        MONTHLY_CASH_RESULT = "monthly_cash_result", "Monthly net cash result"
+        MONTHLY_EXPENSES = "monthly_expenses", "Monthly expenses (maximum)"
+        OVERDUE_BALANCE = "overdue_balance", "Overdue unpaid balance (maximum)"
+        ACTIVE_CLIENTS = "active_clients", "Active clients"
+        CASH_PER_HOUR = "cash_per_hour", "Collected cash per logged hour"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        PAUSED = "paused", "Paused"
+        COMPLETED = "completed", "Completed"
+
+    name = models.CharField(max_length=140)
+    description = models.TextField(blank=True)
+    metric = models.CharField(max_length=32, choices=Metric.choices)
+    target = models.DecimalField(max_digits=18, decimal_places=2)
+    due_date = models.DateField()
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["due_date", "id"]
+        indexes = [models.Index(fields=["status", "due_date"], name="objective_status_due_idx")]
+
+
+class BusinessStrategyDecision(models.Model):
+    """Owner-supplied strategy and subsequent observation; no automated execution."""
+
+    class Kind(models.TextChoices):
+        PRICING = "pricing", "Pricing and packaging"
+        OUTREACH = "outreach", "Client outreach and pitching"
+        DELIVERY = "delivery", "Delivery and scope control"
+        COLLECTIONS = "collections", "Receivables and payment terms"
+        COSTS = "costs", "Cost management"
+        CAPACITY = "capacity", "Time and capacity"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planned"
+        ACTIVE = "active", "In progress"
+        REVIEWED = "reviewed", "Reviewed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    title = models.CharField(max_length=160)
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    rationale = models.TextField(blank=True)
+    expected_effect = models.CharField(max_length=280, blank=True)
+    objective = models.ForeignKey(
+        BusinessObjective, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="decisions"
+    )
+    client = models.ForeignKey(
+        Client, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="strategy_decisions"
+    )
+    metric = models.CharField(max_length=32, choices=BusinessObjective.Metric.choices)
+    baseline = models.DecimalField(
+        max_digits=18, decimal_places=2, null=True, blank=True
+    )
+    started_on = models.DateField()
+    review_on = models.DateField()
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PLANNED)
+    outcome_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["status", "review_on"], name="strategy_status_review_idx"),
+            models.Index(fields=["kind", "started_on"], name="strategy_kind_start_idx"),
+        ]
+
+
+class BusinessAdvisoryReport(models.Model):
+    """Opt-in model-only second opinion: cannot mutate primary ledger records."""
+
+    provider = models.CharField(max_length=16)
+    model_name = models.CharField(max_length=100, blank=True)
+    evidence_signature = models.CharField(max_length=64)
+    advice = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["provider", "created_at"], name="business_advice_provider_idx")
+        ]
