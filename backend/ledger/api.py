@@ -1,9 +1,10 @@
 from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID
 
 from django.contrib.auth import authenticate, login, logout
 from django.db import DatabaseError, IntegrityError, transaction
-from django.db.models import Sum
+from django.db.models import Max, Q, Sum
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -18,6 +19,7 @@ from ledger.models import (
     Expense,
     Instalment,
     Invoice,
+    Meta,
     Payment,
     PaymentAllocation,
     PlanMeta,
@@ -79,6 +81,7 @@ class InvoicePatch(Schema):
 
 
 class PaymentIn(Schema):
+    submission_key: UUID | None = None
     invoice_id: int
     amount: Decimal
     paid_on: date
@@ -147,7 +150,10 @@ def _client_snapshot(client):
 
     invoices = []
     currency_gaps = set()
-    for invoice in client.invoices.annotate(paid_total=Sum("payments__amount")):
+    for invoice in client.invoices.annotate(
+        last_payment_date=Max("payments__paid_on", filter=Q(payments__deleted_at__isnull=True)),
+        paid_total=Sum("payments__amount", filter=Q(payments__deleted_at__isnull=True)),
+    ):
         collected_native = invoice.paid_total or Decimal(0)
         amount_base = convert(invoice.amount, invoice.currency)
         collected_base = convert(collected_native, invoice.currency)
@@ -179,12 +185,12 @@ def _client_snapshot(client):
                 "writeoff_amount": writeoff_base,
                 "collected": collected_base,
                 "due_date": invoice.due_date,
-                "paid_on": invoice.paid_at.date() if invoice.paid_at else None,
+                "paid_on": invoice.last_payment_date if invoice.paid_at else None,
                 "status": invoice.status,
             }
         )
 
-    events = list(client.events.filter(deleted_at__isnull=True))
+    events = list(client.events.filter(deleted_at__isnull=True, payment__deleted_at__isnull=True))
     plans = []
     for invoice in client.invoices.all():
         rows = list(invoice.instalments.all())
@@ -398,7 +404,7 @@ def create_client(request, payload: ClientIn):
 
 
 @router.get("/clients/{client_id}")
-def client_detail(request, client_id: int):
+def client_detail(request, client_id: int, payment_offset: int = 0):
     try:
         client = Client.objects.get(pk=client_id)
     except Client.DoesNotExist:
@@ -407,7 +413,7 @@ def client_detail(request, client_id: int):
     score = compute_client_score(snapshot).as_dict()
     invoices = []
     for inv in client.invoices.select_related("engagement").annotate(
-        paid_total=Sum("payments__amount")
+        paid_total=Sum("payments__amount", filter=Q(payments__deleted_at__isnull=True))
     ):
         paid = inv.paid_total or Decimal(0)
         invoices.append(
@@ -439,7 +445,9 @@ def client_detail(request, client_id: int):
             "method": p.method,
             "reference": p.reference,
         }
-        for p in client.payments.select_related("invoice").all()[:100]
+        for p in client.payments.select_related("invoice").all()[
+            max(0, payment_offset) : max(0, payment_offset) + 100
+        ]
     ]
     events = [
         {
@@ -480,6 +488,7 @@ def client_detail(request, client_id: int):
         },
         "invoices": invoices,
         "payments": payments,
+        "payment_count": client.payments.count(),
         "events": events,
         "engagements": [
             {
@@ -569,7 +578,10 @@ def list_invoices(request, status: str = "", q: str = "", limit: int = 50, offse
     from django.db.models import Q
 
     limit = min(max(limit, 1), 100)
-    qs = Invoice.objects.select_related("client").annotate(paid_total=Sum("payments__amount"))
+    offset = max(0, offset)
+    qs = Invoice.objects.select_related("client").annotate(
+        paid_total=Sum("payments__amount", filter=Q(payments__deleted_at__isnull=True))
+    )
     if status:
         qs = qs.filter(status=status)
     if q.strip():
@@ -761,12 +773,27 @@ def record_payment(request, payload: PaymentIn):
             )
         except Invoice.DoesNotExist:
             raise HttpError(404, "Invoice not found.")
+        if payload.submission_key:
+            existing_payment = Payment.all_objects.filter(
+                invoice=inv, submission_key=payload.submission_key
+            ).first()
+            if existing_payment:
+                if existing_payment.deleted_at or any(
+                    getattr(existing_payment, field) != getattr(payload, field)
+                    for field in ("amount", "paid_on", "method", "reference", "note")
+                ):
+                    raise HttpError(
+                        409, "This submission was already used for a different or reversed payment."
+                    )
+                return existing_payment.receipt
         if inv.status == Invoice.Status.WRITTEN_OFF:
             raise HttpError(422, "Written-off invoices cannot receive payments.")
         prior = inv.payments.aggregate(total=Sum("amount"))["total"] or Decimal(0)
         if payload.amount > inv.amount - prior:
             raise HttpError(422, "Payment exceeds the outstanding invoice balance.")
         payment = Payment.objects.create(
+            submission_key=payload.submission_key,
+            previous_status=inv.status,
             invoice=inv,
             client=inv.client,
             amount=payload.amount,
@@ -795,10 +822,13 @@ def record_payment(request, payload: PaymentIn):
         allocation = {"allocations": [], "unallocated": payload.amount}
         if rows:
             existing = (
-                PaymentAllocation.objects.filter(instalment__in=rows)
+                PaymentAllocation.objects.filter(
+                    instalment__in=rows, payment__deleted_at__isnull=True
+                )
                 .values("instalment_id")
-                .annotate(total=Sum("amount"))
+                .annotate(total=Sum("amount"), last_paid=Max("payment__paid_on"))
             )
+            previous_dates = {x["instalment_id"]: x["last_paid"] for x in existing}
             paid_map = {x["instalment_id"]: x["total"] for x in existing}
             allocation = allocate_payment_fifo(
                 [
@@ -823,14 +853,18 @@ def record_payment(request, payload: PaymentIn):
                 paid_map[item["instalment_id"]] = (
                     paid_map.get(item["instalment_id"], Decimal(0)) + item["amount"]
                 )
+            affected = {item["instalment_id"] for item in allocation["allocations"]}
             for row in rows:
-                total = paid_map.get(row.id, Decimal(0))
+                if row.id not in affected:
+                    continue
+                total = paid_map[row.id]
+                settled_on = max(payload.paid_on, previous_dates.get(row.id, payload.paid_on))
                 if total >= row.amount:
-                    row.status, row.paid_on = Instalment.Status.PAID, payload.paid_on
-                elif total > 0:
+                    row.status, row.paid_on = Instalment.Status.PAID, settled_on
+                else:
                     row.status = (
                         Instalment.Status.LATE
-                        if payload.paid_on > row.due_date
+                        if settled_on > row.due_date
                         else Instalment.Status.PENDING
                     )
                 row.save(update_fields=["status", "paid_on", "updated_at"])
@@ -844,7 +878,8 @@ def record_payment(request, payload: PaymentIn):
             else Invoice.Status.PARTIAL
         )
         if prior >= inv.amount:
-            inv.paid_at = timezone.now()
+            last_date = inv.payments.aggregate(last=Max("paid_on"))["last"]
+            inv.paid_at = timezone.make_aware(datetime.combine(last_date, datetime.min.time()))
         inv.save(update_fields=["status", "paid_at", "updated_at"])
         Event.objects.create(
             client=inv.client,
@@ -896,7 +931,7 @@ def record_payment(request, payload: PaymentIn):
                     occurred_at=timezone.now(),
                 )
         score = _refresh_score(inv.client)
-    return {
+    receipt = {
         "payment_id": payment.id,
         "invoice_status": inv.status,
         "score": score.score,
@@ -906,6 +941,86 @@ def record_payment(request, payload: PaymentIn):
         ],
         "unallocated": str(allocation["unallocated"]),
     }
+
+    Meta.objects.filter(key="client_intelligence_refreshed_at").delete()
+    payment.receipt = receipt
+    payment.save(update_fields=["receipt"])
+    return receipt
+
+
+class ReversalIn(Schema):
+    reason: str
+
+
+@router.post("/payments/{payment_id}/reverse")
+@transaction.atomic
+def reverse_payment(request, payment_id: int, payload: ReversalIn):
+    reason = payload.reason.strip()
+    if not 1 <= len(reason) <= 500:
+        raise HttpError(422, "Provide a correction reason of up to 500 characters.")
+    payment = Payment.all_objects.filter(pk=payment_id).first()
+    if not payment:
+        raise HttpError(404, "Payment not found.")
+    inv = Invoice.objects.select_for_update().get(pk=payment.invoice_id)
+    payment.refresh_from_db()
+    if payment.deleted_at:
+        return {"payment_id": payment_id, "reversed": True}
+    payment.soft_delete()
+    allocated = Decimal(0)
+    for allocation in payment.allocations.select_related("instalment"):
+        row = allocation.instalment
+        if row.deleted_at or row.status == Instalment.Status.WAIVED:
+            continue
+        allocated += allocation.amount
+        row.paid_on = None
+        row.status = (
+            Instalment.Status.OVERDUE
+            if timezone.localdate() > row.due_date
+            else Instalment.Status.PENDING
+        )
+        row.save(update_fields=["paid_on", "status", "updated_at"])
+    last_row = inv.instalments.order_by("-seq").first()
+    if last_row and allocated < payment.amount:
+        # Payments received before the schedule was created had no instalment.
+        # Reopen their balance separately, retaining the agreed scheduled rows.
+        Instalment.objects.create(
+            invoice=inv,
+            client=inv.client,
+            seq=last_row.seq + 1,
+            due_date=max(last_row.due_date, inv.due_date),
+            label="Reopened payment balance",
+            amount=payment.amount - allocated,
+        )
+    inv.paid_at = None
+    if inv.status not in {Invoice.Status.DISPUTED, Invoice.Status.WRITTEN_OFF}:
+        if inv.payments.exists():
+            inv.status = Invoice.Status.PARTIAL
+        else:
+            first = Payment.all_objects.filter(invoice=inv).order_by("id").first()
+            inv.status = (
+                Invoice.Status.DRAFT
+                if first.previous_status == Invoice.Status.DRAFT
+                else Invoice.Status.SENT
+            )
+    inv.save(update_fields=["status", "paid_at", "updated_at"])
+    rows = list(inv.instalments.values("due_date", "status", "paid_on", "grace_days"))
+    if rows:
+        PlanMeta.objects.filter(invoice=inv).update(last_verdict=evaluate_plan_verdict(rows))
+    Event.objects.create(
+        client=inv.client,
+        invoice=inv,
+        engagement=inv.engagement,
+        payment=payment,
+        kind="payment_reversed",
+        category=Event.Category.MONEY,
+        title=f"Payment reversed for {inv.number}",
+        detail=reason,
+        amount=-payment.amount,
+        occurred_at=timezone.now(),
+    )
+    _refresh_score(inv.client)
+    Meta.objects.filter(key="client_intelligence_refreshed_at").delete()
+    return {"payment_id": payment_id, "reversed": True}
 
 
 @router.get("/engagements")
@@ -1197,7 +1312,14 @@ def dashboard(request):
     collected = outstanding = overdue = expenses_total = Decimal(0)
     unknown = set()
     invoices = list(
-        Invoice.objects.select_related("client").annotate(paid_total=Sum("payments__amount"))
+        Invoice.objects.filter(issue_date__lte=today)
+        .select_related("client")
+        .annotate(
+            paid_total=Sum(
+                "payments__amount",
+                filter=Q(payments__deleted_at__isnull=True, payments__paid_on__lte=today),
+            )
+        )
     )
     for inv in invoices:
         paid = inv.paid_total or Decimal(0)
@@ -1210,14 +1332,14 @@ def dashboard(request):
         if paid_base is None or balance_base is None:
             unknown.add(inv.currency)
             continue
-        collected += paid_base
+
         outstanding += balance_base
         if inv.due_date < today and inv.status not in {
             Invoice.Status.PAID,
             Invoice.Status.WRITTEN_OFF,
         }:
             overdue += balance_base
-    for expense in Expense.objects.all():
+    for expense in Expense.objects.filter(spent_on__lte=today):
         amount = convert(expense.amount, expense.currency)
         if amount is None:
             unknown.add(expense.currency)
@@ -1244,7 +1366,7 @@ def dashboard(request):
         cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
     revenue_by_month = {m.strftime("%Y-%m"): Decimal(0) for m in month_starts}
     expense_by_month = {m.strftime("%Y-%m"): Decimal(0) for m in month_starts}
-    for payment in Payment.objects.select_related("invoice").all():
+    for payment in Payment.objects.filter(paid_on__lte=today).select_related("invoice").all():
         key = payment.paid_on.strftime("%Y-%m")
         if key in revenue_by_month:
             value = convert(payment.amount, payment.invoice.currency)
@@ -1252,7 +1374,7 @@ def dashboard(request):
                 unknown.add(payment.invoice.currency)
             else:
                 revenue_by_month[key] += value
-    for expense in Expense.objects.all():
+    for expense in Expense.objects.filter(spent_on__lte=today):
         key = expense.spent_on.strftime("%Y-%m")
         if key in expense_by_month:
             value = convert(expense.amount, expense.currency)
@@ -1299,9 +1421,12 @@ def dashboard(request):
                 else "61_plus"
             )
             aging_totals[bucket] += value
-    for payment in Payment.objects.select_related("client", "invoice").all():
+    for payment in (
+        Payment.objects.filter(paid_on__lte=today).select_related("client", "invoice").all()
+    ):
         value = convert(payment.amount, payment.invoice.currency)
         if value is not None:
+            collected += value
             client_revenue[payment.client_id] = client_revenue.get(
                 payment.client_id, {"name": payment.client.name, "amount": Decimal(0)}
             )
@@ -1346,8 +1471,13 @@ def dashboard(request):
         "net_profit": str(collected - expenses_total),
         "client_count": Client.objects.count(),
         "invoice_count": len(invoices),
-        "payment_count": Payment.objects.count(),
-        "total_hours": str(TimeEntry.objects.aggregate(total=Sum("hours"))["total"] or Decimal(0)),
+        "payment_count": Payment.objects.filter(paid_on__lte=today).count(),
+        "total_hours": str(
+            TimeEntry.objects.filter(started_at__date__lte=today).aggregate(total=Sum("hours"))[
+                "total"
+            ]
+            or Decimal(0)
+        ),
         "attention": attention[:10],
         "today": today_items[:5],
         "revenue_trend": revenue_trend,
