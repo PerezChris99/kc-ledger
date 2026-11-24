@@ -36,17 +36,17 @@ def signing_key(root: Path) -> str:
     return key
 
 
-def first_owner():
+def first_owner(recover=False):
     from tkinter import Tk, Label, Entry, Button, messagebox
     from django.contrib.auth import get_user_model
     from django.contrib.auth.password_validation import validate_password
     from django.core.exceptions import ValidationError
 
     users = get_user_model()
-    if users.objects.filter(is_staff=True, is_active=True).exists():
+    if not recover and users.objects.filter(is_staff=True, is_active=True).exists():
         return
     root = Tk()
-    root.title("KC Ledger — Owner setup")
+    root.title("KC Ledger — Owner recovery" if recover else "KC Ledger — Owner setup")
     root.geometry("430x330")
     root.configure(bg="#F8F9FA")
     fields = {}
@@ -73,13 +73,23 @@ def first_owner():
         except ValidationError as error:
             messagebox.showerror("Password", "\n".join(error.messages))
             return
+        if recover:
+            owner = users.objects.filter(username=username, is_superuser=True, is_active=True).first()
+            if owner is None:
+                messagebox.showerror("Recovery", "Enter the existing owner username.")
+                return
+            owner.set_password(password)
+            owner.save(update_fields=["password"])
+            messagebox.showinfo("Recovery", "Password changed. Sign in with the new password.")
+            root.destroy()
+            return
         if users.objects.filter(username=username).exists():
             messagebox.showerror("Setup", "Username already exists.")
             return
         users.objects.create_superuser(username=username, email="", password=password)
         root.destroy()
 
-    Button(root, text="Create owner account", command=create).pack(pady=22)
+    Button(root, text="Reset owner password" if recover else "Create owner account", command=create).pack(pady=22)
     root.mainloop()
     if not users.objects.filter(is_staff=True, is_active=True).exists():
         raise RuntimeError("Owner setup was cancelled.")
@@ -353,7 +363,11 @@ def main():
             from desktop.upgrade import run_action
 
             sys.exit(run_action(next(iter(selected))))
-        if "--self-test" in sys.argv:
+        if "--recover-owner" in sys.argv:
+            from desktop.upgrade import _django
+            _django()
+            first_owner(recover=True)
+        elif "--self-test" in sys.argv:
             self_test()
         else:
             run()

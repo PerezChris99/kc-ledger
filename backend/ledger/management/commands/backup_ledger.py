@@ -59,6 +59,24 @@ def copy_secondary(source: Path, directory: Path, verify=check_integrity) -> Pat
         temporary.unlink(missing_ok=True)
 
 
+def backup_locations(directory=None):
+    sqlite = connection.vendor == "sqlite"
+    default_dir = (
+        Path(connection.settings_dict["NAME"]).parent / "backups"
+        if sqlite
+        else settings.BASE_DIR / "data" / "backups"
+    )
+    backup_dir = (
+        Path(directory or os.environ.get("LEDGER_BACKUP_DIR") or default_dir).expanduser().resolve()
+    )
+    secondary = os.environ.get("LEDGER_SECONDARY_BACKUP_DIR", "").strip()
+    secondary_path = Path(secondary).expanduser().resolve() if secondary else None
+    if secondary_path and secondary_path == backup_dir:
+        raise CommandError("Secondary backup location must differ from primary.")
+
+    return backup_dir, secondary_path
+
+
 class Command(BaseCommand):
     help = "Back up the live SQLite database via its online API and verify the backup."
 
@@ -72,20 +90,7 @@ class Command(BaseCommand):
         if options["keep"] < 1 or options["keep"] > 1000:
             raise CommandError("--keep must be between 1 and 1000.")
         sqlite = connection.vendor == "sqlite"
-        default_dir = (
-            Path(connection.settings_dict["NAME"]).parent / "backups"
-            if sqlite
-            else settings.BASE_DIR / "data" / "backups"
-        )
-        backup_dir = (
-            Path(options["directory"] or os.environ.get("LEDGER_BACKUP_DIR") or default_dir)
-            .expanduser()
-            .resolve()
-        )
-        secondary = os.environ.get("LEDGER_SECONDARY_BACKUP_DIR", "").strip()
-        secondary_path = Path(secondary).expanduser().resolve() if secondary else None
-        if secondary_path and secondary_path == backup_dir:
-            raise CommandError("Secondary backup location must differ from primary.")
+        backup_dir, secondary_path = backup_locations(options["directory"])
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         if sqlite:

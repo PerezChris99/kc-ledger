@@ -1,5 +1,7 @@
 """Protected, backed-up production migration before Vercel alias promotion."""
 
+import argparse
+import tempfile
 import os
 import hashlib
 import re
@@ -11,10 +13,13 @@ from dotenv import dotenv_values
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--backup-only", action="store_true", help="Create and verify the offsite archive, then exit before migration.")
+    args = parser.parse_args()
     candidate = Path(".vercel/.env.production.local")
-    if not candidate.is_file():
+    if not candidate.is_file() and not args.backup_only:
         raise SystemExit("Vercel production environment has not been pulled")
-    for key, value in dotenv_values(candidate).items():
+    for key, value in (dotenv_values(candidate) if candidate.is_file() else {}).items():
         if value is not None:
             os.environ[key] = value
     os.environ["LEDGER_DEPLOYMENT"] = "vercel"
@@ -30,6 +35,8 @@ def main():
     if direct_url:
         os.environ["DATABASE_URL"] = direct_url
     required = ("DATABASE_URL", "DJANGO_SECRET_KEY", "LEDGER_USERNAME", "LEDGER_PASSWORD")
+    if args.backup_only:
+        required = ("DATABASE_URL", "DJANGO_SECRET_KEY")
     if any(not os.environ.get(name) for name in required):
         raise SystemExit("Missing production managed PostgreSQL or owner credentials")
 
@@ -44,42 +51,46 @@ def main():
     run("makemigrations", "--check", "--dry-run")
     # Before any schema update, create a verified PostgreSQL backup in the
     # restricted ephemeral runner. Never upload it as a workflow artifact.
-    backup_dir = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "kc-ledger-predeploy"
-    run("backup_ledger", "--directory", str(backup_dir))
-    archives = list(backup_dir.glob("ledger-*.dump"))
-    if len(archives) != 1:
-        raise SystemExit("Exactly one verified predeploy archive must be present")
-    archive = archives[0]
-    # A runner-only backup disappears at workflow end. Production requires a
-    # durable PRIVATE offsite copy, server-side KMS encryption and OIDC identity.
-    backup_bucket = os.environ.get("LEDGER_BACKUP_S3_URI", "")
-    kms_key = os.environ.get("LEDGER_BACKUP_KMS_KEY_ID", "")
-    if not re.fullmatch(r"s3://[a-z0-9][a-z0-9.-]{2,62}/[a-zA-Z0-9/_-]+/?", backup_bucket) or not kms_key:
-        raise SystemExit("Secure S3 backup destination and KMS key must be configured")
-    sha = hashlib.sha256(archive.read_bytes()).hexdigest()
-    destination = backup_bucket.rstrip("/") + "/" + archive.name
-    subprocess.run(
-        [
-            "aws", "s3", "cp", str(archive), destination,
-            "--sse", "aws:kms", "--sse-kms-key-id", kms_key,
-            "--metadata", "sha256=" + sha, "--no-progress",
-        ],
-        check=True, env=os.environ.copy(), capture_output=True,
-    )
-    # Verify remote metadata before any migration alters the live database.
-    from urllib.parse import urlsplit
+    with tempfile.TemporaryDirectory(prefix="kc-ledger-backup-", dir=os.environ.get("RUNNER_TEMP")) as workdir:
+        backup_dir = Path(workdir)
+        run("backup_ledger", "--directory", str(backup_dir))
+        archives = list(backup_dir.glob("ledger-*.dump"))
+        if len(archives) != 1:
+            raise SystemExit("Exactly one verified predeploy archive must be present")
+        archive = archives[0]
+        # A runner-only backup disappears at workflow end. Production requires a
+        # durable PRIVATE offsite copy, server-side KMS encryption and OIDC identity.
+        backup_bucket = os.environ.get("LEDGER_BACKUP_S3_URI", "")
+        kms_key = os.environ.get("LEDGER_BACKUP_KMS_KEY_ID", "")
+        if not re.fullmatch(r"s3://[a-z0-9][a-z0-9.-]{2,62}/[a-zA-Z0-9/_-]+/?", backup_bucket) or not kms_key:
+            raise SystemExit("Secure S3 backup destination and KMS key must be configured")
+        with archive.open("rb") as handle:
+            sha = hashlib.file_digest(handle, "sha256").hexdigest()
+        destination = backup_bucket.rstrip("/") + "/" + archive.name
+        subprocess.run(
+            [
+                "aws", "s3", "cp", str(archive), destination,
+                "--sse", "aws:kms", "--sse-kms-key-id", kms_key,
+                "--metadata", "sha256=" + sha, "--no-progress",
+            ],
+            check=True, env=os.environ.copy(), capture_output=True,
+        )
+        # Verify remote metadata before any migration alters the live database.
+        from urllib.parse import urlsplit
 
-    parsed = urlsplit(destination)
-    result = subprocess.run(
-        [
-            "aws", "s3api", "head-object", "--bucket", parsed.netloc,
-            "--key", parsed.path.lstrip("/"), "--query", "Metadata.sha256",
-            "--output", "text",
-        ],
-        check=True, env=os.environ.copy(), capture_output=True, text=True,
-    )
-    if result.stdout.strip() != sha:
-        raise SystemExit("Uploaded production backup SHA does not match")
+        parsed = urlsplit(destination)
+        result = subprocess.run(
+            [
+                "aws", "s3api", "head-object", "--bucket", parsed.netloc,
+                "--key", parsed.path.lstrip("/"), "--query", "Metadata.sha256",
+                "--output", "text",
+            ],
+            check=True, env=os.environ.copy(), capture_output=True, text=True,
+        )
+        if result.stdout.strip() != sha:
+            raise SystemExit("Uploaded production backup SHA does not match")
+    if args.backup_only:
+        return
     run("migrate", "--noinput")
     run("ensure_owner")
     run("check_db_transition")

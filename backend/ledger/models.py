@@ -208,6 +208,9 @@ class Instalment(SoftDeleteModel):
 
 
 class Payment(SoftDeleteModel):
+    submission_key = models.UUIDField(null=True, blank=True)
+    receipt = models.JSONField(default=dict, blank=True)
+    previous_status = models.CharField(max_length=16, blank=True)
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="payments")
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="payments")
     amount = models.DecimalField(max_digits=14, decimal_places=2)
@@ -219,7 +222,10 @@ class Payment(SoftDeleteModel):
     class Meta:
         ordering = ["-paid_on", "-id"]
         constraints = [
-            models.CheckConstraint(condition=Q(amount__gt=0), name="payment_amount_positive")
+            models.UniqueConstraint(
+                fields=["invoice", "submission_key"], name="unique_invoice_payment_submission"
+            ),
+            models.CheckConstraint(condition=Q(amount__gt=0), name="payment_amount_positive"),
         ]
         indexes = [models.Index(fields=["client", "paid_on"], name="payment_client_paid_idx")]
 

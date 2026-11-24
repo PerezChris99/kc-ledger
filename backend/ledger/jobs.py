@@ -306,6 +306,29 @@ def emit_business_intelligence_alerts():
     return emitted_count
 
 
+def ensure_daily_backup():
+    from django.core.management import call_command
+
+    from ledger.management.commands.backup_status import recent_snapshot
+
+    try:
+        if recent_snapshot(24) is None:
+            call_command("backup_ledger")
+    except Exception:
+        now = timezone.now()
+        if not Event.objects.filter(
+            kind="backup_failed", occurred_at__date=timezone.localdate()
+        ).exists():
+            Event.objects.create(
+                kind="backup_failed",
+                category=Event.Category.COMMS,
+                title="Scheduled backup failed",
+                detail="Check backup storage, permissions and server logs.",
+                occurred_at=now,
+            )
+        raise
+
+
 def start_scheduler():
     global _scheduler
     if _scheduler and _scheduler.running:
@@ -375,6 +398,15 @@ def start_scheduler():
         minute=0,
         id="fx-refresh",
         replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        ensure_daily_backup,
+        "interval",
+        minutes=30,
+        next_run_time=timezone.now(),
+        id="verified-backup",
         max_instances=1,
         coalesce=True,
     )

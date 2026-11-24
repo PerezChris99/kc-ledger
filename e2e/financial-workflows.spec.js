@@ -39,7 +39,7 @@ test("owner creates a client, invoices the client, and records a partial payment
     await nav.getByRole("button", { name: "Invoices" }).click();
     await page.getByRole("button", { name: "Create invoice" }).click();
     const invoiceDialog = page.getByRole("dialog", { name: "CREATE INVOICE" });
-    await invoiceDialog.getByLabel("CLIENT").selectOption({ label: "E2E Customer · E2E Verified Business" });
+    await invoiceDialog.getByLabel("CLIENT", { exact: true }).selectOption({ label: "E2E Customer · E2E Verified Business" });
     await invoiceDialog.getByLabel("INVOICE NUMBER").fill("E2E-0001");
     await invoiceDialog.getByLabel("TITLE").fill("Application design services");
     await invoiceDialog.getByLabel("AMOUNT").fill("100.00");
@@ -53,4 +53,25 @@ test("owner creates a client, invoices the client, and records a partial payment
     await paymentDialog.getByRole("button", { name: "Save payment" }).click();
     await expect(paymentDialog).toBeHidden();
     await expect(invoiceRow).toContainText("75.00");
+    await nav.getByRole("button", { name: "Clients" }).click();
+    await page.getByRole("row").filter({ hasText: "E2E Verified Business" }).first().click();
+    page.once("dialog", dialog => dialog.accept("Receipt was assigned to the wrong invoice"));
+    await page.getByRole("button", { name: "Reverse payment" }).click();
+    await expect(page.getByRole("button", { name: "Reverse payment" })).toHaveCount(0);
+    await nav.getByRole("button", { name: "Invoices" }).click();
+    await invoiceRow.getByRole("button", { name: "Record payment" }).click();
+    await expect(paymentDialog.getByLabel(/PAYMENT AMOUNT/)).toHaveValue("100.00");
+    await paymentDialog.getByRole("button", { name: "Save payment" }).click();
+    await expect(paymentDialog).toBeHidden();
+    await expect(invoiceRow.getByText("paid", { exact: true })).toBeVisible();
+});
+
+test("owner can enter the private workspace on a phone-sized screen", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByLabel("USERNAME").fill(username);
+    await page.getByLabel("PASSWORD").fill(password);
+    await page.getByRole("button", { name: /Open console/i }).click();
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true }).first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

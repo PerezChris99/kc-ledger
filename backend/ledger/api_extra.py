@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
@@ -116,7 +116,7 @@ def insights(request):
     convert = conversion_for(base)
 
     for invoice in Invoice.objects.select_related("client").annotate(
-        paid_total=Sum("payments__amount")
+        paid_total=Sum("payments__amount", filter=Q(payments__deleted_at__isnull=True))
     ):
         paid = invoice.paid_total or Decimal(0)
         balance = (
@@ -276,7 +276,11 @@ def _target_progress(target):
         # Aggregate payment totals in SQL; never fetch one Python row per payment.
         # Resolve the required FX pairs once for this target currency.
         convert = conversion_for(target.currency)
-        totals = Payment.objects.values("invoice__currency").annotate(total=Sum("amount"))
+        totals = (
+            Payment.objects.filter(paid_on__lte=today)
+            .values("invoice__currency")
+            .annotate(total=Sum("amount"))
+        )
         for row in totals:
             amount = convert(row["total"], row["invoice__currency"])
             if amount is None:
@@ -786,6 +790,8 @@ def list_notifications(request, since: datetime | None = None, limit: int = 30):
     if timezone.is_naive(since):
         since = timezone.make_aware(since, timezone.get_current_timezone())
     kinds = [
+        "backup_failed",
+        "payment_reversed",
         "invoice_overdue_reminder",
         "instalment_due_reminder",
         "payment_recorded",
@@ -835,9 +841,9 @@ def export_client_dossier(request, client_id: int):
     snapshot = _client_snapshot(client)
     score = compute_client_score(snapshot).as_dict()
     invoices = []
-    for invoice in client.invoices.annotate(paid_total=Sum("payments__amount")).order_by(
-        "-issue_date"
-    ):
+    for invoice in client.invoices.annotate(
+        paid_total=Sum("payments__amount", filter=Q(payments__deleted_at__isnull=True))
+    ).order_by("-issue_date"):
         paid = invoice.paid_total or Decimal(0)
         invoices.append(
             {
@@ -919,9 +925,9 @@ def update_plan(request, invoice_id: int, payload: PlanIn):
         if invoice.status in {Invoice.Status.PAID, Invoice.Status.WRITTEN_OFF}:
             raise HttpError(422, "Paid or written-off invoices cannot have their plans edited.")
         existing = list(invoice.instalments.all())
-        if PaymentAllocation.objects.filter(instalment__in=existing).exists() or any(
-            row.status == Instalment.Status.PAID or row.paid_on for row in existing
-        ):
+        if PaymentAllocation.objects.filter(
+            instalment__in=existing, payment__deleted_at__isnull=True
+        ).exists() or any(row.status == Instalment.Status.PAID or row.paid_on for row in existing):
             raise HttpError(
                 409,
                 "A plan with allocated payments cannot be edited; preserve its financial history.",
